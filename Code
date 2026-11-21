@@ -1,4 +1,4 @@
--- KHASTIFY'S UNIVERSAL HUB V2
+-- KHASTIFY'S UNIVERSAL HUB V3
 -- Client-side utility panel. Behavior depends on the Roblox experience.
 local Players=game:GetService('Players')
 local UIS=game:GetService('UserInputService')
@@ -24,7 +24,42 @@ local originalCollision={}
 local originalTransparency={}
 local function restoreNoclip()for p,value in pairs(originalCollision) do if p and p.Parent then p.CanCollide=value end end;table.clear(originalCollision) end
 local function restoreInvisible()for p,value in pairs(originalTransparency) do if p and p.Parent then p.LocalTransparencyModifier=value end end;table.clear(originalTransparency) end
-local function setInvisible(on)restoreInvisible();if on and char() then for _,p in ipairs(char():GetDescendants()) do if p:IsA('BasePart') then originalTransparency[p]=p.LocalTransparencyModifier;p.LocalTransparencyModifier=1 end end end end
+-- Experimental underground body + local hologram. Other players will NOT see the local clone.
+local hologram, invisibleStart, previousAnchor
+local function setInvisible(on)
+ local c=char();local r=root();local camera=workspace.CurrentCamera
+ if hologram then hologram:Destroy();hologram=nil end
+ restoreInvisible()
+ if not on then
+  if r and invisibleStart then r.Anchored=previousAnchor or false;r.CFrame=invisibleStart end
+  if camera and hum() then camera.CameraSubject=hum() end
+  invisibleStart=nil;previousAnchor=nil
+  return
+ end
+ if not (c and r) then state.invisible=false;return end
+ invisibleStart=r.CFrame;previousAnchor=r.Anchored
+ local oldArchivable=c.Archivable;c.Archivable=true
+ local ok,copy=pcall(function()return c:Clone()end)
+ c.Archivable=oldArchivable
+ if not ok or not copy then state.invisible=false;invisibleStart=nil;return end
+ copy.Name='KHASTIFY_Local_Hologram'
+ for _,item in ipairs(copy:GetDescendants()) do
+  if item:IsA('Script') or item:IsA('LocalScript') then item:Destroy()
+  elseif item:IsA('BasePart') then
+   item.Anchored=true;item.CanCollide=false;item.CanTouch=false;item.CanQuery=false
+   item.Material=Enum.Material.ForceField
+   item.Transparency=math.max(item.Transparency,.35)
+  end
+ end
+ copy.Parent=workspace;copy:PivotTo(c:GetPivot());hologram=copy
+ for _,item in ipairs(c:GetDescendants()) do
+  if item:IsA('BasePart') then originalTransparency[item]=item.LocalTransparencyModifier;item.LocalTransparencyModifier=1 end
+ end
+ -- Small offset below the original location; actual map geometry varies by game.
+ r.CFrame=invisibleStart*CFrame.new(0,-8,0);r.Anchored=true
+ local ghostHum=copy:FindFirstChildOfClass('Humanoid')
+ if camera and ghostHum then camera.CameraSubject=ghostHum end
+end
 local flyVelocity,flyGyro
 local function stopFly()if flyVelocity then flyVelocity:Destroy();flyVelocity=nil end;if flyGyro then flyGyro:Destroy();flyGyro=nil end;local h=hum();if h then h.PlatformStand=false end end
 local function startFly()stopFly();local r=root();local h=hum();if not(r and h) then return end;h.PlatformStand=true;flyVelocity=Instance.new('BodyVelocity');flyVelocity.MaxForce=Vector3.new(1e9,1e9,1e9);flyVelocity.Velocity=Vector3.zero;flyVelocity.Parent=r;flyGyro=Instance.new('BodyGyro');flyGyro.MaxTorque=Vector3.new(1e9,1e9,1e9);flyGyro.P=9000;flyGyro.Parent=r end
@@ -39,7 +74,7 @@ ui('UICorner',{CornerRadius=UDim.new(0,8)},bg);ui('UIStroke',{Color=C.edge,Thick
 local sidebar=ui('Frame',{Size=UDim2.fromOffset(118,470),BackgroundColor3=C.side,BorderSizePixel=0},bg)
 ui('UICorner',{CornerRadius=UDim.new(0,8)},sidebar)
 ui('Frame',{Position=UDim2.new(1,-1,0,0),Size=UDim2.new(0,1,1,0),BackgroundColor3=C.edge,BorderSizePixel=0},sidebar)
-local header=ui('TextLabel',{Size=UDim2.fromOffset(118,43),BackgroundTransparency=1,Text='KHASTIFY  v2',TextColor3=C.text,Font=Enum.Font.GothamBold,TextSize=11},sidebar)
+local header=ui('TextLabel',{Size=UDim2.fromOffset(118,43),BackgroundTransparency=1,Text='KHASTIFY  v3',TextColor3=C.text,Font=Enum.Font.GothamBold,TextSize=11},sidebar)
 local topbar=ui('Frame',{Position=UDim2.fromOffset(118,0),Size=UDim2.new(1,-118,0,39),BackgroundTransparency=1},bg)
 local title=ui('TextLabel',{Position=UDim2.fromOffset(12,0),Size=UDim2.new(1,-78,1,0),BackgroundTransparency=1,Text='Commands',TextXAlignment=Enum.TextXAlignment.Left,TextColor3=C.text,Font=Enum.Font.GothamBold,TextSize=13},topbar)
 local close=ui('TextButton',{Position=UDim2.new(1,-27,0,8),Size=UDim2.fromOffset(19,20),BackgroundTransparency=1,Text='×',TextColor3=C.muted,Font=Enum.Font.GothamBold,TextSize=18},topbar)
@@ -51,7 +86,7 @@ local commandBar=ui('Frame',{Position=UDim2.new(0,129,1,-39),Size=UDim2.new(1,-1
 ui('UICorner',{CornerRadius=UDim.new(0,5)},commandBar);ui('UIStroke',{Color=C.edge,Thickness=1},commandBar)
 local commandInput=ui('TextBox',{Position=UDim2.fromOffset(8,0),Size=UDim2.new(1,-44,1,0),BackgroundTransparency=1,Text='',PlaceholderText='›  command...',PlaceholderColor3=C.muted,TextColor3=C.text,ClearTextOnFocus=false,Font=Enum.Font.Gotham,TextSize=11,TextXAlignment=Enum.TextXAlignment.Left},commandBar)
 local send=ui('TextButton',{Position=UDim2.new(1,-29,0,3),Size=UDim2.fromOffset(25,25),BackgroundTransparency=1,Text='➤',TextColor3=C.purple,Font=Enum.Font.GothamBold,TextSize=16},commandBar)
-local sections={};local active='Commands';local sidebarButtons={}
+local sections={};local active='Commands';local sidebarButtons={};local show
 local function clear()for _,c in ipairs(content:GetChildren()) do if c~=list then c:Destroy() end end end
 local function label(t)
  return ui('TextLabel',{Size=UDim2.new(1,-4,0,25),BackgroundTransparency=1,Text=t,TextColor3=C.muted,TextXAlignment=Enum.TextXAlignment.Left,Font=Enum.Font.GothamBold,TextSize=11},content)
@@ -82,14 +117,14 @@ sections.Commands=function()
  label('COMMANDS  /  QUICK ACTIONS')
  button('fly  •  Toggle flight',content,function()state.fly=not state.fly;if state.fly then startFly()else stopFly()end end)
  button('noclip  •  Toggle collisions',content,function()state.noclip=not state.noclip;if not state.noclip then restoreNoclip()end end)
- button('invisible  •  Local invisibility',content,function()state.invisible=not state.invisible;setInvisible(state.invisible)end)
+ button('invisible  •  Underground hologram (experimental)',content,function()state.invisible=not state.invisible;setInvisible(state.invisible)end)
  button('fullbright  •  Lighting',content,function()state.fullbright=not state.fullbright;setFullbright(state.fullbright)end)
  label('Type fly, unfly, noclip, clip, invisible, visible, fullbright, normal, or rejoin below.')
 end
 sections['Voice Chat']=function()label('VOICE CHAT');label('Voice chat controls will be added in a future update.')end
 sections.Players=function()
  label('PLAYERS  /  TELEPORT')
- button('Refresh player list',content,function()sections.Players()end)
+ button('Refresh player list',content,function()show('Players')end)
  for _,p in ipairs(playerList())do button(p.DisplayName..'  (@'..p.Name..')   → TP',content,function()local r=root();local target=p.Character and p.Character:FindFirstChild('HumanoidRootPart');if r and target then r.CFrame=target.CFrame*CFrame.new(3,0,0)end end)end
 end
 sections.Actions=function()
@@ -97,7 +132,7 @@ sections.Actions=function()
  toggle('Noclip','noclip',function(on)if not on then restoreNoclip()end end)
  toggle('Fly (WASD / Space / Ctrl)','fly',function(on)if on then startFly()else stopFly()end end)
  toggle('Infinite Jump','infiniteJump')
- toggle('Ctrl + Click TP','clickTP')
+ toggle('Click TP (click anywhere in world)','clickTP')
  slider('WalkSpeed','speed',0,200,function(v)local h=hum();if h then h.WalkSpeed=v end end)
  slider('JumpPower','jump',0,200,function(v)local h=hum();if h then h.UseJumpPower=true;h.JumpPower=v end end)
 end
@@ -116,7 +151,7 @@ sections.Settings=function()
  button('Reset UI position',content,function()state.uiX=.5;state.uiY=.5;bg.Position=UDim2.new(.5,-217,.5,-235);save()end)
  button('Unload hub',content,function()if _G.KHASTIFY_HUB_CLEANUP then _G.KHASTIFY_HUB_CLEANUP()end end)
 end
-local function show(name)
+show=function(name)
  active=name;title.Text=name;clear();sections[name]()
  for n,b in pairs(sidebarButtons)do b.TextColor3=(n==name and C.purple or C.muted);b.BackgroundColor3=(n==name and Color3.fromRGB(27,21,43)or C.side)end
 end
@@ -150,8 +185,27 @@ bind(UIS.InputBegan,function(i,processed)
   if i.KeyCode.Name==state.menuKey then bg.Visible=not bg.Visible end
   if i.KeyCode==Enum.KeyCode.Space and state.infiniteJump then local h=hum();if h then h:ChangeState(Enum.HumanoidStateType.Jumping)end end
  end
- if state.clickTP and i.UserInputType==Enum.UserInputType.MouseButton1 and (UIS:IsKeyDown(Enum.KeyCode.LeftControl) or UIS:IsKeyDown(Enum.KeyCode.RightControl)) and not bg.Visible then
-  local r=root();if r and mouse.Hit then r.CFrame=CFrame.new(mouse.Hit.Position+Vector3.new(0,4,0))end
+ if state.clickTP and i.UserInputType==Enum.UserInputType.MouseButton1 then
+  local pos=UIS:GetMouseLocation()
+  local overHub=false
+  for _,obj in ipairs(guiParent:GetGuiObjectsAtPosition(pos.X,pos.Y)) do
+   if obj:IsDescendantOf(gui) then overHub=true;break end
+  end
+  if not overHub then
+   local camera=workspace.CurrentCamera;local r=root()
+   if camera and r then
+    local ray=camera:ViewportPointToRay(pos.X,pos.Y)
+    local params=RaycastParams.new();params.FilterType=Enum.RaycastFilterType.Exclude
+    local excludes={};if char() then table.insert(excludes,char()) end
+    if hologram then table.insert(excludes,hologram) end
+    params.FilterDescendantsInstances=excludes
+    local hit=workspace:Raycast(ray.Origin,ray.Direction*10000,params)
+    if hit then
+     if state.invisible then setInvisible(false);state.invisible=false end
+     r.CFrame=CFrame.new(hit.Position+Vector3.new(0,3.5,0))
+    end
+   end
+  end
  end
 end)
 bind(Run.Stepped,function()
@@ -170,6 +224,7 @@ bind(Run.RenderStepped,function()
  end
 end)
 bind(LP.CharacterAdded,function(c)
+ if hologram then hologram:Destroy();hologram=nil end;invisibleStart=nil;previousAnchor=nil;state.invisible=false
  stopFly();table.clear(originalCollision);table.clear(originalTransparency)
  local h=c:WaitForChild('Humanoid',10);if h then h.WalkSpeed=state.speed;h.UseJumpPower=true;h.JumpPower=state.jump end
  task.wait(.3);if state.fly then startFly()end;if state.invisible then setInvisible(true)end
@@ -178,8 +233,8 @@ local h=hum();if h then h.WalkSpeed=state.speed;h.UseJumpPower=true;h.JumpPower=
 if state.fullbright then setFullbright(true)end
 show('Commands')
 _G.KHASTIFY_HUB_CLEANUP=function()
- state.fly=false;stopFly();state.noclip=false;restoreNoclip();state.invisible=false;restoreInvisible();state.fullbright=false;setFullbright(false)
+ state.fly=false;stopFly();state.noclip=false;restoreNoclip();setInvisible(false);state.invisible=false;state.fullbright=false;setFullbright(false)
  for _,c in ipairs(connections) do pcall(function()c:Disconnect()end) end
  gui:Destroy();_G.KHASTIFY_HUB_CLEANUP=nil
 end
-print("KHASTIFY'S UNIVERSAL HUB V2 loaded. Press "..state.menuKey.." to open/close.")
+print("KHASTIFY'S UNIVERSAL HUB V3 loaded. Press "..state.menuKey.." to open/close.")
