@@ -1,6 +1,6 @@
--- KHASTIFY'S UNIVERSAL HUB V4
--- Movable Invisibility + Air Walk
--- Client-side features; compatibility varies by game.
+-- KHASTIFY'S UNIVERSAL HUB V5
+-- Movement + Character update
+-- Client-side utility hub
 
 local Players = game:GetService("Players")
 local UIS = game:GetService("UserInputService")
@@ -10,30 +10,47 @@ local Http = game:GetService("HttpService")
 local TeleportService = game:GetService("TeleportService")
 
 local LP = Players.LocalPlayer
-local mouse = LP:GetMouse()
 
 if _G.KHASTIFY_HUB_CLEANUP then
     pcall(_G.KHASTIFY_HUB_CLEANUP)
 end
 
 local parent = (gethui and gethui()) or LP:WaitForChild("PlayerGui")
-local previous = parent:FindFirstChild("KhastifyUniversalHub")
-if previous then previous:Destroy() end
-
 local connections = {}
-local function bind(signal, callback)
-    local connection = signal:Connect(callback)
-    table.insert(connections, connection)
-    return connection
+local temporary = {}
+
+local function bind(signal, fn)
+    local c = signal:Connect(fn)
+    table.insert(connections, c)
+    return c
+end
+
+local function char()
+    return LP.Character
+end
+
+local function hum()
+    local c = char()
+    return c and c:FindFirstChildOfClass("Humanoid")
+end
+
+local function root()
+    local c = char()
+    return c and c:FindFirstChild("HumanoidRootPart")
 end
 
 local state = {
-    noclip = false,
     fly = false,
-    invisible = false,
-    airWalk = false,
-    clickTP = false,
+    flySpeed = 60,
+    flyAnim = false,
+    noclip = false,
     infiniteJump = false,
+    clickTP = false,
+    airWalk = false,
+    dashPower = 84,
+    invisible = false,
+    headless = false,
+    freeze = false,
     fullbright = false,
     speed = 16,
     jump = 50,
@@ -47,9 +64,9 @@ local saveFile = "KHASTIFY_Universal_Hub_Settings.json"
 if type(readfile) == "function" then
     pcall(function()
         local data = Http:JSONDecode(readfile(saveFile))
-        for key, value in pairs(data) do
-            if state[key] ~= nil and type(value) == type(state[key]) then
-                state[key] = value
+        for k, v in pairs(data) do
+            if state[k] ~= nil and type(v) == type(state[k]) then
+                state[k] = v
             end
         end
     end)
@@ -57,8 +74,11 @@ end
 
 local function save()
     if type(writefile) ~= "function" then return end
+
     pcall(function()
         writefile(saveFile, Http:JSONEncode({
+            flySpeed = state.flySpeed,
+            dashPower = state.dashPower,
             speed = state.speed,
             jump = state.jump,
             menuKey = state.menuKey,
@@ -68,67 +88,61 @@ local function save()
     end)
 end
 
-local function character()
-    return LP.Character
-end
+-- MOVEMENT
 
-local function humanoid()
-    local c = character()
-    return c and c:FindFirstChildOfClass("Humanoid")
-end
-
-local function root()
-    local c = character()
-    return c and c:FindFirstChild("HumanoidRootPart")
-end
-
--- MOVEMENT SYSTEM
-
-local originalCollision = {}
-local originalTransparency = {}
+local collisions = {}
 
 local function restoreCollision()
-    for part, value in pairs(originalCollision) do
-        if part and part.Parent then
-            part.CanCollide = value
+    for p, original in pairs(collisions) do
+        if p and p.Parent then
+            p.CanCollide = original
         end
     end
-    table.clear(originalCollision)
+    table.clear(collisions)
 end
 
-local function restoreTransparency()
-    for part, value in pairs(originalTransparency) do
-        if part and part.Parent then
-            part.LocalTransparencyModifier = value
-        end
-    end
-    table.clear(originalTransparency)
+local flyVelocity
+local flyGyro
+
+local function stopFly()
+    if flyVelocity then flyVelocity:Destroy() end
+    if flyGyro then flyGyro:Destroy() end
+
+    flyVelocity = nil
+    flyGyro = nil
+
+    local h = hum()
+    if h then h.PlatformStand = false end
 end
 
--- AIR WALK SYSTEM
+local function startFly()
+    stopFly()
+
+    local r = root()
+    local h = hum()
+    if not r or not h then return end
+
+    h.PlatformStand = true
+
+    flyVelocity = Instance.new("BodyVelocity")
+    flyVelocity.Name = "KHASTIFY_FlyVelocity"
+    flyVelocity.MaxForce = Vector3.new(1e9, 1e9, 1e9)
+    flyVelocity.Velocity = Vector3.zero
+    flyVelocity.Parent = r
+
+    flyGyro = Instance.new("BodyGyro")
+    flyGyro.Name = "KHASTIFY_FlyGyro"
+    flyGyro.MaxTorque = Vector3.new(1e9, 1e9, 1e9)
+    flyGyro.P = 9000
+    flyGyro.Parent = r
+end
 
 local airPlatform
-local invisiblePlatform
 local airHeight
 
-local function makePlatform(name)
-    local p = Instance.new("Part")
-    p.Name = name
-    p.Size = Vector3.new(7, 0.5, 7)
-    p.Transparency = 1
-    p.Anchored = true
-    p.CanCollide = true
-    p.CanTouch = false
-    p.CastShadow = false
-    p.Parent = workspace
-    return p
-end
-
 local function stopAirWalk()
-    if airPlatform then
-        airPlatform:Destroy()
-        airPlatform = nil
-    end
+    if airPlatform then airPlatform:Destroy() end
+    airPlatform = nil
     airHeight = nil
 end
 
@@ -139,47 +153,69 @@ local function startAirWalk()
     if not r then return end
 
     airHeight = r.Position.Y - 3.2
-    airPlatform = makePlatform("KHASTIFY_AirWalk")
-end
 
-local function updateAirWalk()
-    local r = root()
-    if not r or not airPlatform then return end
-
+    airPlatform = Instance.new("Part")
+    airPlatform.Name = "KHASTIFY_AirWalk"
+    airPlatform.Size = Vector3.new(9, 0.5, 9)
+    airPlatform.Anchored = true
+    airPlatform.Transparency = 1
+    airPlatform.CanCollide = true
+    airPlatform.CanTouch = false
+    airPlatform.CastShadow = false
     airPlatform.Position = Vector3.new(
         r.Position.X,
         airHeight - 0.25,
         r.Position.Z
     )
+    airPlatform.Parent = workspace
 end
 
--- INVISIBILITY SYSTEM
--- Real character moves beneath the visible hologram.
--- A local platform supports the underground character.
+local function dash()
+    local r = root()
+    local camera = workspace.CurrentCamera
+    if not r or not camera then return end
+
+    local direction = camera.CFrame.LookVector
+    direction = Vector3.new(direction.X, 0, direction.Z)
+
+    if direction.Magnitude < 0.01 then return end
+
+    direction = direction.Unit
+
+    local current = r.AssemblyLinearVelocity
+
+    r.AssemblyLinearVelocity =
+        direction * state.dashPower +
+        Vector3.new(0, current.Y, 0)
+end
+
+-- CHARACTER
 
 local hologram
+local support
 local invisibleOffset = 8
-local invisibleStart
 local invisibleActive = false
+local savedTransparency = {}
+local savedHeadTransparency = {}
+local savedHeadDecals = {}
 
-local function removeHologram()
-    if hologram then
-        hologram:Destroy()
-        hologram = nil
-    end
+local function removePart(p)
+    if p then p:Destroy() end
 end
 
-local function removeInvisiblePlatform()
-    if invisiblePlatform then
-        invisiblePlatform:Destroy()
-        invisiblePlatform = nil
+local function restoreTransparency()
+    for p, value in pairs(savedTransparency) do
+        if p and p.Parent then
+            p.LocalTransparencyModifier = value
+        end
     end
+    table.clear(savedTransparency)
 end
 
 local function setInvisible(enabled)
-    local c = character()
+    local c = char()
     local r = root()
-    local h = humanoid()
+    local h = hum()
     local camera = workspace.CurrentCamera
 
     if not enabled then
@@ -189,37 +225,34 @@ local function setInvisible(enabled)
         end
 
         invisibleActive = false
-        removeHologram()
-        removeInvisiblePlatform()
+
+        removePart(hologram)
+        removePart(support)
+
+        hologram = nil
+        support = nil
+
         restoreTransparency()
 
         if camera and h then
             camera.CameraSubject = h
         end
 
-        invisibleStart = nil
         return
     end
 
-    if not c or not r or not h then
-        state.invisible = false
-        return
-    end
-
-    if invisibleActive then return end
-
-    invisibleStart = r.CFrame
+    if not c or not r or not h or invisibleActive then return end
 
     local oldArchivable = c.Archivable
     c.Archivable = true
 
-    local success, copy = pcall(function()
+    local ok, copy = pcall(function()
         return c:Clone()
     end)
 
     c.Archivable = oldArchivable
 
-    if not success or not copy then
+    if not ok or not copy then
         state.invisible = false
         return
     end
@@ -234,37 +267,42 @@ local function setInvisible(enabled)
             obj.CanCollide = false
             obj.CanTouch = false
             obj.CanQuery = false
-            obj.Material = Enum.Material.ForceField
 
             if obj.Name ~= "HumanoidRootPart" then
-                obj.Transparency = math.max(obj.Transparency, 0.3)
+                obj.Material = Enum.Material.ForceField
+                obj.Transparency = math.max(obj.Transparency, 0.35)
             end
         end
     end
 
     copy.Parent = workspace
-    copy:PivotTo(c:GetPivot())
     hologram = copy
 
-    for _, obj in ipairs(c:GetDescendants()) do
-        if obj:IsA("BasePart") then
-            originalTransparency[obj] = obj.LocalTransparencyModifier
-            obj.LocalTransparencyModifier = 1
+    for _, p in ipairs(c:GetDescendants()) do
+        if p:IsA("BasePart") then
+            savedTransparency[p] = p.LocalTransparencyModifier
+            p.LocalTransparencyModifier = 1
         end
     end
 
-    -- Move the real body beneath the visible character.
     r.CFrame = r.CFrame * CFrame.new(0, -invisibleOffset, 0)
     r.AssemblyLinearVelocity = Vector3.zero
 
-    invisiblePlatform = makePlatform("KHASTIFY_InvisibleSupport")
+    support = Instance.new("Part")
+    support.Name = "KHASTIFY_InvisibleSupport"
+    support.Size = Vector3.new(8, 0.5, 8)
+    support.Transparency = 1
+    support.Anchored = true
+    support.CanCollide = true
+    support.CanTouch = false
+    support.Parent = workspace
 
     invisibleActive = true
 
-    local ghostHumanoid = copy:FindFirstChildOfClass("Humanoid")
+    local ghostHum = copy:FindFirstChildOfClass("Humanoid")
 
-    if camera and ghostHumanoid then
-        camera.CameraSubject = ghostHumanoid
+    if camera and ghostHum then
+        camera.CameraSubject = ghostHum
     end
 end
 
@@ -274,60 +312,100 @@ local function updateInvisible()
     local r = root()
     if not r then return end
 
-    -- Keep the hologram aligned with the moving character.
     if hologram and hologram.Parent then
-        hologram:PivotTo(
-            r.CFrame * CFrame.new(0, invisibleOffset, 0)
-        )
+        hologram:PivotTo(r.CFrame * CFrame.new(0, invisibleOffset, 0))
     end
 
-    -- Support the underground body while allowing horizontal movement.
-    if invisiblePlatform then
-        invisiblePlatform.Position = Vector3.new(
-            r.Position.X,
-            r.Position.Y - 3.2,
-            r.Position.Z
-        )
+    if support then
+        support.Position = r.Position - Vector3.new(0, 3.2, 0)
     end
 end
 
--- FLIGHT SYSTEM
+local function setHeadless(enabled)
+    local c = char()
+    if not c then return end
 
-local flyVelocity
-local flyGyro
+    local head = c:FindFirstChild("Head")
+    if not head then return end
 
-local function stopFly()
-    if flyVelocity then
-        flyVelocity:Destroy()
-        flyVelocity = nil
+    if enabled then
+        if savedHeadTransparency[head] == nil then
+            savedHeadTransparency[head] = head.LocalTransparencyModifier
+        end
+
+        head.LocalTransparencyModifier = 1
+
+        for _, obj in ipairs(head:GetDescendants()) do
+            if obj:IsA("Decal") or obj:IsA("Texture") then
+                if savedHeadDecals[obj] == nil then
+                    savedHeadDecals[obj] = obj.Transparency
+                end
+                obj.Transparency = 1
+            end
+        end
+    else
+        for p, value in pairs(savedHeadTransparency) do
+            if p and p.Parent then
+                p.LocalTransparencyModifier = value
+            end
+        end
+
+        for p, value in pairs(savedHeadDecals) do
+            if p and p.Parent then
+                p.Transparency = value
+            end
+        end
+
+        table.clear(savedHeadTransparency)
+        table.clear(savedHeadDecals)
     end
-
-    if flyGyro then
-        flyGyro:Destroy()
-        flyGyro = nil
-    end
-
-    local h = humanoid()
-    if h then h.PlatformStand = false end
 end
 
-local function startFly()
-    stopFly()
-
+local function setFreeze(enabled)
     local r = root()
-    local h = humanoid()
-    if not r or not h then return end
+    if not r then return end
 
-    h.PlatformStand = true
+    r.Anchored = enabled
 
-    flyVelocity = Instance.new("BodyVelocity")
-    flyVelocity.MaxForce = Vector3.new(1e9, 1e9, 1e9)
-    flyVelocity.Parent = r
+    if enabled then
+        r.AssemblyLinearVelocity = Vector3.zero
+        r.AssemblyAngularVelocity = Vector3.zero
+    end
+end
 
-    flyGyro = Instance.new("BodyGyro")
-    flyGyro.MaxTorque = Vector3.new(1e9, 1e9, 1e9)
-    flyGyro.P = 9000
-    flyGyro.Parent = r
+local function sit()
+    local h = hum()
+    if h then h.Sit = true end
+end
+
+local function unstuck()
+    local r = root()
+    if not r then return end
+
+    r.Anchored = false
+    state.freeze = false
+
+    r.CFrame = r.CFrame * CFrame.new(0, 6, 0)
+    r.AssemblyLinearVelocity = Vector3.zero
+end
+
+local function respawn()
+    local h = hum()
+    if h then h.Health = 0 end
+end
+
+local function selfFling()
+    local r = root()
+    if not r then return end
+
+    r.AssemblyLinearVelocity =
+        Vector3.new(
+            math.random(-120, 120),
+            100,
+            math.random(-120, 120)
+        )
+
+    r.AssemblyAngularVelocity = Vector3.new(15, 20, 15)
 end
 
 -- LIGHTING
@@ -339,15 +417,15 @@ local originalLighting = {
     GlobalShadows = Lighting.GlobalShadows
 }
 
-local function setFullbright(enabled)
+local function fullbright(enabled)
     if enabled then
         Lighting.Brightness = 3
         Lighting.ClockTime = 14
         Lighting.FogEnd = 1000000
         Lighting.GlobalShadows = false
     else
-        for key, value in pairs(originalLighting) do
-            Lighting[key] = value
+        for k, v in pairs(originalLighting) do
+            Lighting[k] = v
         end
     end
 end
@@ -360,11 +438,13 @@ gui.ResetOnSpawn = false
 gui.ZIndexBehavior = Enum.ZIndexBehavior.Sibling
 gui.Parent = parent
 
-local function ui(class, properties, container)
+local function create(class, props, container)
     local obj = Instance.new(class)
-    for key, value in pairs(properties) do
-        obj[key] = value
+
+    for k, v in pairs(props) do
+        obj[k] = v
     end
+
     obj.Parent = container
     return obj
 end
@@ -379,41 +459,44 @@ local C = {
     purple = Color3.fromRGB(142, 77, 244)
 }
 
-local window = ui("Frame", {
-    Name = "Window",
+local window = create("Frame", {
     Size = UDim2.fromOffset(435, 470),
     Position = UDim2.new(state.uiX, -217, state.uiY, -235),
     BackgroundColor3 = C.bg,
     BorderSizePixel = 0
 }, gui)
 
-ui("UICorner", {CornerRadius = UDim.new(0, 8)}, window)
-ui("UIStroke", {Color = C.edge, Thickness = 1}, window)
+create("UICorner", {
+    CornerRadius = UDim.new(0, 8)
+}, window)
 
-local sidebar = ui("Frame", {
+create("UIStroke", {
+    Color = C.edge,
+    Thickness = 1
+}, window)
+
+local sidebar = create("Frame", {
     Size = UDim2.fromOffset(118, 470),
     BackgroundColor3 = C.side,
     BorderSizePixel = 0
 }, window)
 
-ui("UICorner", {CornerRadius = UDim.new(0, 8)}, sidebar)
-
-ui("TextLabel", {
+create("TextLabel", {
     Size = UDim2.fromOffset(118, 43),
     BackgroundTransparency = 1,
-    Text = "KHASTIFY  v4",
+    Text = "KHASTIFY  v5",
     TextColor3 = C.text,
     Font = Enum.Font.GothamBold,
     TextSize = 11
 }, sidebar)
 
-local topbar = ui("Frame", {
+local topbar = create("Frame", {
     Position = UDim2.fromOffset(118, 0),
     Size = UDim2.new(1, -118, 0, 39),
     BackgroundTransparency = 1
 }, window)
 
-local title = ui("TextLabel", {
+local title = create("TextLabel", {
     Position = UDim2.fromOffset(12, 0),
     Size = UDim2.new(1, -78, 1, 0),
     BackgroundTransparency = 1,
@@ -424,7 +507,7 @@ local title = ui("TextLabel", {
     TextSize = 13
 }, topbar)
 
-local close = ui("TextButton", {
+local close = create("TextButton", {
     Position = UDim2.new(1, -27, 0, 8),
     Size = UDim2.fromOffset(19, 20),
     BackgroundTransparency = 1,
@@ -434,7 +517,7 @@ local close = ui("TextButton", {
     TextSize = 18
 }, topbar)
 
-local minimize = ui("TextButton", {
+local minimize = create("TextButton", {
     Position = UDim2.new(1, -52, 0, 8),
     Size = UDim2.fromOffset(19, 20),
     BackgroundTransparency = 1,
@@ -444,9 +527,9 @@ local minimize = ui("TextButton", {
     TextSize = 17
 }, topbar)
 
-local content = ui("ScrollingFrame", {
-    Position = UDim2.fromOffset(130, 44),
-    Size = UDim2.new(1, -142, 1, -90),
+local content = create("ScrollingFrame", {
+    Position = UDim2.fromOffset(130, 76),
+    Size = UDim2.new(1, -142, 1, -122),
     BackgroundTransparency = 1,
     BorderSizePixel = 0,
     ScrollBarThickness = 2,
@@ -454,8 +537,8 @@ local content = ui("ScrollingFrame", {
     CanvasSize = UDim2.fromOffset(0, 0)
 }, window)
 
-local layout = ui("UIListLayout", {
-    Padding = UDim.new(0, 6)
+local layout = create("UIListLayout", {
+    Padding = UDim.new(0, 5)
 }, content)
 
 bind(layout:GetPropertyChangedSignal("AbsoluteContentSize"), function()
@@ -465,21 +548,30 @@ bind(layout:GetPropertyChangedSignal("AbsoluteContentSize"), function()
     )
 end)
 
-local commandBar = ui("Frame", {
+local tabs = create("Frame", {
+    Position = UDim2.fromOffset(130, 43),
+    Size = UDim2.new(1, -142, 0, 28),
+    BackgroundTransparency = 1
+}, window)
+
+local tabLayout = create("UIListLayout", {
+    FillDirection = Enum.FillDirection.Horizontal,
+    Padding = UDim.new(0, 5)
+}, tabs)
+
+local commandBar = create("Frame", {
     Position = UDim2.new(0, 129, 1, -39),
     Size = UDim2.new(1, -140, 0, 31),
     BackgroundColor3 = C.card,
     BorderSizePixel = 0
 }, window)
 
-ui("UICorner", {CornerRadius = UDim.new(0, 5)}, commandBar)
-
-local commandInput = ui("TextBox", {
+local commandInput = create("TextBox", {
     Position = UDim2.fromOffset(8, 0),
     Size = UDim2.new(1, -44, 1, 0),
     BackgroundTransparency = 1,
     Text = "",
-    PlaceholderText = "›  command...",
+    PlaceholderText = "› command...",
     PlaceholderColor3 = C.muted,
     TextColor3 = C.text,
     ClearTextOnFocus = false,
@@ -488,7 +580,7 @@ local commandInput = ui("TextBox", {
     TextXAlignment = Enum.TextXAlignment.Left
 }, commandBar)
 
-local send = ui("TextButton", {
+local send = create("TextButton", {
     Position = UDim2.new(1, -29, 0, 3),
     Size = UDim2.fromOffset(25, 25),
     BackgroundTransparency = 1,
@@ -501,19 +593,22 @@ local send = ui("TextButton", {
 local sections = {}
 local sidebarButtons = {}
 local active = "Commands"
+local localTab = "Movement"
 local show
 
 local function clear()
     for _, obj in ipairs(content:GetChildren()) do
-        if obj ~= layout then
-            obj:Destroy()
-        end
+        if obj ~= layout then obj:Destroy() end
+    end
+
+    for _, obj in ipairs(tabs:GetChildren()) do
+        if obj ~= tabLayout then obj:Destroy() end
     end
 end
 
 local function label(text)
-    return ui("TextLabel", {
-        Size = UDim2.new(1, -4, 0, 25),
+    create("TextLabel", {
+        Size = UDim2.new(1, -4, 0, 24),
         BackgroundTransparency = 1,
         Text = text,
         TextColor3 = C.muted,
@@ -524,8 +619,8 @@ local function label(text)
 end
 
 local function button(text, callback)
-    local b = ui("TextButton", {
-        Size = UDim2.new(1, -4, 0, 33),
+    local b = create("TextButton", {
+        Size = UDim2.new(1, -4, 0, 31),
         BackgroundColor3 = C.card,
         Text = "  " .. text,
         TextXAlignment = Enum.TextXAlignment.Left,
@@ -535,7 +630,9 @@ local function button(text, callback)
         BorderSizePixel = 0
     }, content)
 
-    ui("UICorner", {CornerRadius = UDim.new(0, 5)}, b)
+    create("UICorner", {
+        CornerRadius = UDim.new(0, 5)
+    }, b)
 
     bind(b.MouseButton1Click, function()
         callback(b)
@@ -547,91 +644,180 @@ end
 local function toggle(text, key, callback)
     local b
 
-    b = button(text .. "     " .. (state[key] and "ON" or "OFF"), function()
-        state[key] = not state[key]
+    b = button(
+        text .. "     " .. (state[key] and "ON" or "OFF"),
+        function()
+            state[key] = not state[key]
 
-        b.Text = "  " .. text .. "     " ..
-            (state[key] and "ON" or "OFF")
+            b.Text = "  " .. text .. "     " ..
+                (state[key] and "ON" or "OFF")
 
-        if callback then callback(state[key]) end
-    end)
+            if callback then callback(state[key]) end
+        end
+    )
 end
 
-local function slider(text, key, min, max, callback)
-    local row = ui("Frame", {
-        Size = UDim2.new(1, -4, 0, 54),
+local function numberControl(text, key, callback)
+    local row = create("Frame", {
+        Size = UDim2.new(1, -4, 0, 34),
         BackgroundColor3 = C.card,
         BorderSizePixel = 0
     }, content)
 
-    ui("UICorner", {CornerRadius = UDim.new(0, 5)}, row)
-
-    local t = ui("TextLabel", {
-        Position = UDim2.fromOffset(8, 3),
-        Size = UDim2.new(1, -16, 0, 23),
+    create("TextLabel", {
+        Position = UDim2.fromOffset(8, 0),
+        Size = UDim2.new(0.53, 0, 1, 0),
         BackgroundTransparency = 1,
-        Text = text .. "   " .. state[key],
-        TextXAlignment = Enum.TextXAlignment.Left,
+        Text = text,
         TextColor3 = C.text,
+        TextXAlignment = Enum.TextXAlignment.Left,
         Font = Enum.Font.Gotham,
         TextSize = 11
     }, row)
 
-    local track = ui("Frame", {
-        Position = UDim2.new(0, 9, 0, 37),
-        Size = UDim2.new(1, -18, 0, 5),
-        BackgroundColor3 = C.edge,
-        BorderSizePixel = 0
+    local input = create("TextBox", {
+        Position = UDim2.new(0.55, 0, 0, 4),
+        Size = UDim2.new(0.25, 0, 1, -8),
+        BackgroundColor3 = C.bg,
+        Text = tostring(state[key]),
+        TextColor3 = C.text,
+        Font = Enum.Font.Gotham,
+        TextSize = 11,
+        ClearTextOnFocus = false
     }, row)
 
-    local fill = ui("Frame", {
-        Size = UDim2.fromScale(
-            math.clamp((state[key] - min) / (max - min), 0, 1),
-            1
-        ),
+    local set = create("TextButton", {
+        Position = UDim2.new(0.81, 0, 0, 4),
+        Size = UDim2.new(0.17, 0, 1, -8),
         BackgroundColor3 = C.purple,
-        BorderSizePixel = 0
-    }, track)
+        Text = "set",
+        TextColor3 = Color3.new(1, 1, 1),
+        Font = Enum.Font.GothamBold,
+        TextSize = 10
+    }, row)
 
-    local dragging = false
+    local function apply()
+        local value = tonumber(input.Text)
 
-    local function update(x)
-        local ratio = math.clamp(
-            (x - track.AbsolutePosition.X) /
-            math.max(track.AbsoluteSize.X, 1),
-            0,
-            1
-        )
-
-        state[key] = math.floor(min + (max - min) * ratio + 0.5)
-        fill.Size = UDim2.fromScale(ratio, 1)
-        t.Text = text .. "   " .. state[key]
-
-        callback(state[key])
-        save()
+        if value then
+            value = math.clamp(value, 0, 500)
+            state[key] = value
+            input.Text = tostring(value)
+            if callback then callback(value) end
+            save()
+        else
+            input.Text = tostring(state[key])
+        end
     end
 
-    bind(track.InputBegan, function(input)
-        if input.UserInputType == Enum.UserInputType.MouseButton1 then
-            dragging = true
-            update(input.Position.X)
-        end
+    bind(set.MouseButton1Click, apply)
+    bind(input.FocusLost, function(enter)
+        if enter then apply() end
+    end)
+end
+
+local function tab(name)
+    local selected = localTab == name
+
+    local b = create("TextButton", {
+        Size = UDim2.fromOffset(name == "Movement" and 83 or 78, 24),
+        BackgroundColor3 = selected and C.purple or C.card,
+        Text = name,
+        TextColor3 = selected and Color3.new(1, 1, 1) or C.muted,
+        Font = Enum.Font.Gotham,
+        TextSize = 10,
+        BorderSizePixel = 0
+    }, tabs)
+
+    create("UICorner", {
+        CornerRadius = UDim.new(0, 4)
+    }, b)
+
+    bind(b.MouseButton1Click, function()
+        localTab = name
+        show("Local Player")
+    end)
+end
+
+-- LOCAL PLAYER TABS
+
+local function movementTab()
+    label("MOVEMENT")
+
+    toggle("Fly", "fly", function(on)
+        if on then startFly() else stopFly() end
     end)
 
-    bind(UIS.InputChanged, function(input)
-        if dragging and input.UserInputType == Enum.UserInputType.MouseMovement then
-            update(input.Position.X)
-        end
+    numberControl("Fly Speed", "flySpeed")
+
+    toggle("Fly Animation", "flyAnim")
+
+    toggle("Noclip", "noclip", function(on)
+        if not on then restoreCollision() end
     end)
 
-    bind(UIS.InputEnded, function(input)
-        if input.UserInputType == Enum.UserInputType.MouseButton1 then
-            dragging = false
+    toggle("Infinite Jump", "infiniteJump")
+    toggle("Click TP", "clickTP")
+
+    toggle("Air Walk", "airWalk", function(on)
+        if on then startAirWalk() else stopAirWalk() end
+    end)
+
+    numberControl("Dash Power", "dashPower")
+
+    button("Dash (Q)", function()
+        dash()
+    end)
+
+    numberControl("WalkSpeed", "speed", function(v)
+        local h = hum()
+        if h then h.WalkSpeed = v end
+    end)
+
+    numberControl("JumpPower", "jump", function(v)
+        local h = hum()
+        if h then
+            h.UseJumpPower = true
+            h.JumpPower = v
         end
     end)
 end
 
--- CATEGORIES
+local function characterTab()
+    label("CHARACTER")
+
+    toggle("Invisible", "invisible", setInvisible)
+
+    button("Emotes", function()
+        local h = hum()
+        if h then
+            pcall(function()
+                h:PlayEmote("wave")
+            end)
+        end
+    end)
+
+    toggle("Headless", "headless", setHeadless)
+
+    button("Sit", sit)
+    button("Unstuck", unstuck)
+
+    toggle("Freeze", "freeze", setFreeze)
+
+    button("Respawn", respawn)
+    button("Self Fling", selfFling)
+end
+
+sections["Local Player"] = function()
+    tab("Movement")
+    tab("Character")
+
+    if localTab == "Movement" then
+        movementTab()
+    else
+        characterTab()
+    end
+end
 
 sections.Commands = function()
     label("COMMANDS / QUICK ACTIONS")
@@ -646,22 +832,17 @@ sections.Commands = function()
         if not state.noclip then restoreCollision() end
     end)
 
-    button("Invisibility", function()
-        state.invisible = not state.invisible
-        setInvisible(state.invisible)
-    end)
-
     button("Air Walk", function()
         state.airWalk = not state.airWalk
         if state.airWalk then startAirWalk() else stopAirWalk() end
     end)
 
-    label("Use the command bar for additional controls.")
-end
+    button("Invisibility", function()
+        state.invisible = not state.invisible
+        setInvisible(state.invisible)
+    end)
 
-sections["Voice Chat"] = function()
-    label("VOICE CHAT")
-    label("Voice utilities are not implemented yet.")
+    button("Dash", dash)
 end
 
 sections.Players = function()
@@ -673,9 +854,9 @@ sections.Players = function()
 
     local playerList = {}
 
-    for _, player in ipairs(Players:GetPlayers()) do
-        if player ~= LP then
-            table.insert(playerList, player)
+    for _, p in ipairs(Players:GetPlayers()) do
+        if p ~= LP then
+            table.insert(playerList, p)
         end
     end
 
@@ -683,11 +864,11 @@ sections.Players = function()
         return a.Name:lower() < b.Name:lower()
     end)
 
-    for _, player in ipairs(playerList) do
-        button(player.DisplayName .. " (@" .. player.Name .. ")  → TP", function()
+    for _, p in ipairs(playerList) do
+        button(p.DisplayName .. " (@" .. p.Name .. ") → TP", function()
             local r = root()
-            local target = player.Character and
-                player.Character:FindFirstChild("HumanoidRootPart")
+            local target = p.Character and
+                p.Character:FindFirstChild("HumanoidRootPart")
 
             if r and target then
                 if state.invisible then
@@ -701,71 +882,15 @@ sections.Players = function()
     end
 end
 
-sections.Actions = function()
-    label("ACTIONS / MOVEMENT")
-
-    toggle("Noclip", "noclip", function(enabled)
-        if not enabled then restoreCollision() end
-    end)
-
-    toggle("Fly", "fly", function(enabled)
-        if enabled then startFly() else stopFly() end
-    end)
-
-    toggle("Air Walk", "airWalk", function(enabled)
-        if enabled then startAirWalk() else stopAirWalk() end
-    end)
-
-    toggle("Invisibility", "invisible", setInvisible)
-    toggle("Infinite Jump", "infiniteJump")
-    toggle("Click TP", "clickTP")
-
-    slider("WalkSpeed", "speed", 0, 200, function(value)
-        local h = humanoid()
-        if h then h.WalkSpeed = value end
-    end)
-
-    slider("JumpPower", "jump", 0, 200, function(value)
-        local h = humanoid()
-        if h then
-            h.UseJumpPower = true
-            h.JumpPower = value
-        end
-    end)
-end
-
-sections["ESV Users"] = function()
-    label("HUB USERS")
-    label("Cross-player discovery is not available.")
-end
-
-sections.Nametags = function()
-    label("NAMETAGS")
-    label("Coming in a future version.")
-end
-
 sections.Shaders = function()
     label("SHADERS / VISUALS")
-    toggle("Fullbright", "fullbright", setFullbright)
-end
-
-sections["Local Player"] = function()
-    label("LOCAL PLAYER")
-
-    toggle("Invisibility", "invisible", setInvisible)
-
-    toggle("Air Walk", "airWalk", function(enabled)
-        if enabled then startAirWalk() else stopAirWalk() end
-    end)
-
-    toggle("Infinite Jump", "infiniteJump")
-    toggle("Click TP", "clickTP")
+    toggle("Fullbright", "fullbright", fullbright)
 end
 
 sections.Servers = function()
     label("SERVERS")
 
-    button("Rejoin current server", function()
+    button("Rejoin Server", function()
         pcall(function()
             TeleportService:TeleportToPlaceInstance(
                 game.PlaceId,
@@ -779,27 +904,25 @@ end
 sections.Settings = function()
     label("GENERAL / SETTINGS")
 
-    button("Menu hotkey: " .. state.menuKey .. " • Change", function(b)
-        b.Text = "  Press a key (Esc cancels)"
+    button("Menu Hotkey: " .. state.menuKey, function(b)
+        b.Text = "  Press a key..."
 
         local conn
         conn = UIS.InputBegan:Connect(function(input)
             if input.UserInputType == Enum.UserInputType.Keyboard then
                 conn:Disconnect()
 
-                if input.KeyCode ~= Enum.KeyCode.Escape and
-                    input.KeyCode ~= Enum.KeyCode.Unknown then
-
+                if input.KeyCode ~= Enum.KeyCode.Escape then
                     state.menuKey = input.KeyCode.Name
                     save()
                 end
 
-                b.Text = "  Menu hotkey: " .. state.menuKey .. " • Change"
+                b.Text = "  Menu Hotkey: " .. state.menuKey
             end
         end)
     end)
 
-    button("Reset UI position", function()
+    button("Reset UI Position", function()
         state.uiX = 0.5
         state.uiY = 0.5
         window.Position = UDim2.new(0.5, -217, 0.5, -235)
@@ -813,10 +936,26 @@ sections.Settings = function()
     end)
 end
 
+for _, name in ipairs({
+    "Voice Chat",
+    "ESV Users",
+    "Nametags",
+    "Actions"
+}) do
+    local sectionName = name
+    sections[sectionName] = function()
+        label(sectionName:upper())
+        button("Open Local Player", function()
+            show("Local Player")
+        end)
+    end
+end
+
 show = function(name)
     active = name
     title.Text = name
     clear()
+
     sections[name]()
 
     for section, b in pairs(sidebarButtons) do
@@ -844,7 +983,7 @@ for i, entry in ipairs(entries) do
     local name = entry[1]
     local y = i == 10 and 435 or 49 + (i - 1) * 34
 
-    local b = ui("TextButton", {
+    local b = create("TextButton", {
         Position = UDim2.fromOffset(5, y),
         Size = UDim2.fromOffset(108, 29),
         BackgroundColor3 = C.side,
@@ -856,8 +995,6 @@ for i, entry in ipairs(entries) do
         TextSize = 10
     }, sidebar)
 
-    ui("UICorner", {CornerRadius = UDim.new(0, 4)}, b)
-
     sidebarButtons[name] = b
 
     bind(b.MouseButton1Click, function()
@@ -865,7 +1002,7 @@ for i, entry in ipairs(entries) do
     end)
 end
 
--- COMMAND BAR
+-- COMMANDS
 
 local function executeCommand()
     local cmd = commandInput.Text:lower():match("^%s*(.-)%s*$")
@@ -874,53 +1011,48 @@ local function executeCommand()
     if cmd == "fly" then
         state.fly = true
         startFly()
-
     elseif cmd == "unfly" then
         state.fly = false
         stopFly()
-
     elseif cmd == "noclip" then
         state.noclip = true
-
     elseif cmd == "clip" then
         state.noclip = false
         restoreCollision()
-
-    elseif cmd == "invisible" then
-        state.invisible = true
-        setInvisible(true)
-
-    elseif cmd == "visible" then
-        state.invisible = false
-        setInvisible(false)
-
     elseif cmd == "airwalk" then
         state.airWalk = true
         startAirWalk()
-
     elseif cmd == "unairwalk" then
         state.airWalk = false
         stopAirWalk()
-
+    elseif cmd == "invisible" then
+        state.invisible = true
+        setInvisible(true)
+    elseif cmd == "visible" then
+        state.invisible = false
+        setInvisible(false)
+    elseif cmd == "dash" then
+        dash()
+    elseif cmd == "sit" then
+        sit()
+    elseif cmd == "unstuck" then
+        unstuck()
+    elseif cmd == "freeze" then
+        state.freeze = true
+        setFreeze(true)
+    elseif cmd == "unfreeze" then
+        state.freeze = false
+        setFreeze(false)
+    elseif cmd == "respawn" then
+        respawn()
+    elseif cmd == "fling" then
+        selfFling()
     elseif cmd == "fullbright" then
         state.fullbright = true
-        setFullbright(true)
-
+        fullbright(true)
     elseif cmd == "normal" then
         state.fullbright = false
-        setFullbright(false)
-
-    elseif cmd == "rejoin" then
-        pcall(function()
-            TeleportService:TeleportToPlaceInstance(
-                game.PlaceId,
-                game.JobId,
-                LP
-            )
-        end)
-
-    elseif cmd ~= "" then
-        warn("[KHASTIFY HUB] Unknown command: " .. cmd)
+        fullbright(false)
     end
 
     if active == "Commands" then
@@ -942,7 +1074,7 @@ bind(minimize.MouseButton1Click, function()
     window.Visible = false
 end)
 
--- DRAGGABLE UI
+-- DRAGGING
 
 local dragging = false
 local dragStart
@@ -971,25 +1103,23 @@ end)
 
 bind(UIS.InputEnded, function(input)
     if input.UserInputType == Enum.UserInputType.MouseButton1 then
-        if dragging then
-            dragging = false
+        dragging = false
 
-            local camera = workspace.CurrentCamera
-            if camera then
-                local size = camera.ViewportSize
+        local camera = workspace.CurrentCamera
+        if camera then
+            local size = camera.ViewportSize
 
-                state.uiX = math.clamp(
-                    (window.AbsolutePosition.X + 217) / size.X,
-                    0, 1
-                )
+            state.uiX = math.clamp(
+                (window.AbsolutePosition.X + 217) / size.X,
+                0, 1
+            )
 
-                state.uiY = math.clamp(
-                    (window.AbsolutePosition.Y + 235) / size.Y,
-                    0, 1
-                )
+            state.uiY = math.clamp(
+                (window.AbsolutePosition.Y + 235) / size.Y,
+                0, 1
+            )
 
-                save()
-            end
+            save()
         end
     end
 end)
@@ -1005,21 +1135,25 @@ bind(UIS.InputBegan, function(input, processed)
         end
 
         if input.KeyCode == Enum.KeyCode.Space and state.infiniteJump then
-            local h = humanoid()
+            local h = hum()
             if h then
                 h:ChangeState(Enum.HumanoidStateType.Jumping)
             end
+        end
+
+        if input.KeyCode == Enum.KeyCode.Q then
+            dash()
         end
     end
 
     if state.clickTP and
         input.UserInputType == Enum.UserInputType.MouseButton1 then
 
-        local position = UIS:GetMouseLocation()
+        local pos = UIS:GetMouseLocation()
         local overUI = false
 
         for _, obj in ipairs(
-            parent:GetGuiObjectsAtPosition(position.X, position.Y)
+            parent:GetGuiObjectsAtPosition(pos.X, pos.Y)
         ) do
             if obj:IsDescendantOf(gui) then
                 overUI = true
@@ -1032,31 +1166,17 @@ bind(UIS.InputBegan, function(input, processed)
             local r = root()
 
             if camera and r then
-                local ray = camera:ViewportPointToRay(
-                    position.X,
-                    position.Y
-                )
+                local ray = camera:ViewportPointToRay(pos.X, pos.Y)
 
                 local params = RaycastParams.new()
                 params.FilterType = Enum.RaycastFilterType.Exclude
 
                 local exclude = {}
 
-                if character() then
-                    table.insert(exclude, character())
-                end
-
-                if hologram then
-                    table.insert(exclude, hologram)
-                end
-
-                if airPlatform then
-                    table.insert(exclude, airPlatform)
-                end
-
-                if invisiblePlatform then
-                    table.insert(exclude, invisiblePlatform)
-                end
+                if char() then table.insert(exclude, char()) end
+                if hologram then table.insert(exclude, hologram) end
+                if airPlatform then table.insert(exclude, airPlatform) end
+                if support then table.insert(exclude, support) end
 
                 params.FilterDescendantsInstances = exclude
 
@@ -1088,22 +1208,28 @@ end)
 -- CONTINUOUS UPDATES
 
 bind(Run.Stepped, function()
-    if (state.noclip or state.invisible) and character() then
-        for _, part in ipairs(character():GetDescendants()) do
-            if part:IsA("BasePart") then
-                if originalCollision[part] == nil then
-                    originalCollision[part] = part.CanCollide
+    if (state.noclip or state.invisible) and char() then
+        for _, p in ipairs(char():GetDescendants()) do
+            if p:IsA("BasePart") then
+                if collisions[p] == nil then
+                    collisions[p] = p.CanCollide
                 end
 
-                part.CanCollide = false
+                p.CanCollide = false
             end
         end
     end
 end)
 
 bind(Run.Heartbeat, function()
-    if state.airWalk then
-        updateAirWalk()
+    local r = root()
+
+    if state.airWalk and airPlatform and r then
+        airPlatform.Position = Vector3.new(
+            r.Position.X,
+            airHeight - 0.25,
+            r.Position.Z
+        )
     end
 
     if state.invisible then
@@ -1117,35 +1243,35 @@ bind(Run.RenderStepped, function()
         if not camera then return end
 
         local cf = camera.CFrame
-        local velocity = Vector3.zero
+        local direction = Vector3.zero
 
         if UIS:IsKeyDown(Enum.KeyCode.W) then
-            velocity += cf.LookVector
+            direction += cf.LookVector
         end
 
         if UIS:IsKeyDown(Enum.KeyCode.S) then
-            velocity -= cf.LookVector
+            direction -= cf.LookVector
         end
 
         if UIS:IsKeyDown(Enum.KeyCode.D) then
-            velocity += cf.RightVector
+            direction += cf.RightVector
         end
 
         if UIS:IsKeyDown(Enum.KeyCode.A) then
-            velocity -= cf.RightVector
+            direction -= cf.RightVector
         end
 
         if UIS:IsKeyDown(Enum.KeyCode.Space) then
-            velocity += Vector3.yAxis
+            direction += Vector3.yAxis
         end
 
         if UIS:IsKeyDown(Enum.KeyCode.LeftControl) then
-            velocity -= Vector3.yAxis
+            direction -= Vector3.yAxis
         end
 
         flyVelocity.Velocity =
-            (velocity.Magnitude > 0 and velocity.Unit or Vector3.zero)
-            * math.max(state.speed, 35)
+            (direction.Magnitude > 0 and direction.Unit or Vector3.zero)
+            * state.flySpeed
 
         flyGyro.CFrame = cf
     end
@@ -1154,17 +1280,24 @@ end)
 -- RESPAWN
 
 bind(LP.CharacterAdded, function(c)
-    removeHologram()
-    removeInvisiblePlatform()
-    stopAirWalk()
     stopFly()
+    stopAirWalk()
 
+    removePart(hologram)
+    removePart(support)
+
+    hologram = nil
+    support = nil
     invisibleActive = false
+
     state.invisible = false
     state.airWalk = false
+    state.freeze = false
 
-    table.clear(originalCollision)
-    table.clear(originalTransparency)
+    table.clear(collisions)
+    table.clear(savedTransparency)
+    table.clear(savedHeadTransparency)
+    table.clear(savedHeadDecals)
 
     local h = c:WaitForChild("Humanoid", 10)
 
@@ -1181,8 +1314,7 @@ bind(LP.CharacterAdded, function(c)
     end
 end)
 
-local h = humanoid()
-
+local h = hum()
 if h then
     h.WalkSpeed = state.speed
     h.UseJumpPower = true
@@ -1190,10 +1322,10 @@ if h then
 end
 
 if state.fullbright then
-    setFullbright(true)
+    fullbright(true)
 end
 
-show("Commands")
+show("Local Player")
 
 -- CLEANUP
 
@@ -1210,10 +1342,14 @@ _G.KHASTIFY_HUB_CLEANUP = function()
     state.noclip = false
     restoreCollision()
 
-    restoreTransparency()
+    state.headless = false
+    setHeadless(false)
+
+    state.freeze = false
+    setFreeze(false)
 
     state.fullbright = false
-    setFullbright(false)
+    fullbright(false)
 
     for _, connection in ipairs(connections) do
         pcall(function()
@@ -1225,5 +1361,5 @@ _G.KHASTIFY_HUB_CLEANUP = function()
     _G.KHASTIFY_HUB_CLEANUP = nil
 end
 
-print("KHASTIFY'S UNIVERSAL HUB V4 LOADED")
+print("KHASTIFY'S UNIVERSAL HUB V5 LOADED")
 print("Press " .. state.menuKey .. " to open the menu.")
