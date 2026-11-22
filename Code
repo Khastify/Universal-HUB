@@ -1,31 +1,20 @@
 --[[
-    KHASTIFY'S UNIVERSAL HUB V33
+    KHASTIFY'S UNIVERSAL HUB V34
 
-    CHANGES:
-    - Redesigned symmetrical Voice Chat icon
-    - Redesigned six-tooth Settings gear
-    - Removed Previous Servers entirely
-    - Removed previous-server history tracking
-
-    PRESERVED:
-    - Commands icon
-    - Players icon
-    - Actions icon
-    - Servers icon
-    - Auto Execute
-    - Current server / Rejoin Server
-    - Public server browser
-    - Refresh / Load More
-    - Inverse dropdown colors
-    - Movement and character commands
-    - Custom keybinds
+    V34:
+    - Voice Chat icon based on supplied microphone PNG
+    - Settings icon based on supplied six-tooth SVG
+    - Servers > All subsection restored
+    - Previous Servers remains removed
+    - Approved icons preserved
+    - Auto Execute preserved
 
     K = Toggle Hub
     Q = Dash
 ]]
 
 --==================================================
--- SERVICES
+-- SERVICES / CLEANUP
 --==================================================
 
 local Players = game:GetService("Players")
@@ -88,8 +77,7 @@ local function Label(parent, value, size, color, bold)
         BorderSizePixel = 0,
         Text = value,
         TextColor3 = color,
-        Font = bold and Enum.Font.GothamBold
-            or Enum.Font.Gotham,
+        Font = bold and Enum.Font.GothamBold or Enum.Font.Gotham,
         TextSize = size or 14,
         TextXAlignment = Enum.TextXAlignment.Left,
         TextYAlignment = Enum.TextYAlignment.Center,
@@ -170,29 +158,20 @@ local State = {
 }
 
 local Keybinds = {Dash = "Q"}
-
 local SaveFile = "KHASTIFY_Universal_Hub_Settings.json"
 
 local function ReadJSON(filename)
-    if type(readfile) ~= "function" then
-        return nil
-    end
+    if type(readfile) ~= "function" then return nil end
 
     local ok, data = pcall(function()
         return HttpService:JSONDecode(readfile(filename))
     end)
 
-    if ok and type(data) == "table" then
-        return data
-    end
-
-    return nil
+    return ok and type(data) == "table" and data or nil
 end
 
 local function WriteJSON(filename, data)
-    if type(writefile) ~= "function" then
-        return false
-    end
+    if type(writefile) ~= "function" then return false end
 
     return pcall(function()
         writefile(filename, HttpService:JSONEncode(data))
@@ -234,15 +213,8 @@ local function Save()
 end
 
 --==================================================
--- AUTO EXECUTE
+-- AUTO EXECUTE - V33 BEHAVIOR PRESERVED
 --==================================================
-
--- Keep this URL identical to the one used in V32.
--- Replace it only if your actual GitHub repository differs.
-
-local SCRIPT_URL =
-    "https://raw.githubusercontent.com/" ..
-    "Khastify/Universal-HUB/main/Code"
 
 local AUTOEXEC_FILENAME = "KHASTIFY_AutoExecute.lua"
 
@@ -315,9 +287,7 @@ local function InstallStartupLoader()
 end
 
 local function RemoveStartupLoader()
-    if type(delfile) ~= "function" then
-        return
-    end
+    if type(delfile) ~= "function" then return end
 
     for _, folder in ipairs({"autoexec", "Autoexec"}) do
         local path = folder .. "/" .. AUTOEXEC_FILENAME
@@ -333,20 +303,14 @@ local function RemoveStartupLoader()
 end
 
 local function QueueNextTeleport()
-    if not State.autoExecute then
-        return false
-    end
-
-    if type(QueueTeleport) ~= "function" then
-        return false
-    end
+    if not State.autoExecute then return false end
+    if type(QueueTeleport) ~= "function" then return false end
 
     local ok = pcall(function()
         QueueTeleport(LoaderSource())
     end)
 
     AutoExecute.teleportSupported = ok
-
     return ok
 end
 
@@ -380,7 +344,7 @@ if State.autoExecute then
 end
 
 --==================================================
--- ICON PRIMITIVES
+-- ICON DRAWING HELPERS
 --==================================================
 
 local function Line(parent, x1, y1, x2, y2, color, thick)
@@ -405,20 +369,13 @@ local function Line(parent, x1, y1, x2, y2, color, thick)
     }, parent)
 
     Corner(obj, thick)
-
     return obj
 end
 
 local function Dot(parent, x, y, radius, color)
     local obj = Create("Frame", {
-        Position = UDim2.fromOffset(
-            x - radius,
-            y - radius
-        ),
-        Size = UDim2.fromOffset(
-            radius * 2,
-            radius * 2
-        ),
+        Position = UDim2.fromOffset(x - radius, y - radius),
+        Size = UDim2.fromOffset(radius * 2, radius * 2),
         BackgroundColor3 = color,
         BorderSizePixel = 0
     }, parent)
@@ -432,14 +389,8 @@ end
 
 local function Circle(parent, x, y, radius, color, thick)
     local obj = Create("Frame", {
-        Position = UDim2.fromOffset(
-            x - radius,
-            y - radius
-        ),
-        Size = UDim2.fromOffset(
-            radius * 2,
-            radius * 2
-        ),
+        Position = UDim2.fromOffset(x - radius, y - radius),
+        Size = UDim2.fromOffset(radius * 2, radius * 2),
         BackgroundTransparency = 1,
         BorderSizePixel = 0
     }, parent)
@@ -449,13 +400,10 @@ local function Circle(parent, x, y, radius, color, thick)
     }, obj)
 
     Stroke(obj, color, thick or 2)
-
     return obj
 end
 
-local function OutlineRect(
-    parent, x, y, w, h, color, radius, thick
-)
+local function OutlineRect(parent, x, y, w, h, color, radius, thick)
     local obj = Create("Frame", {
         Position = UDim2.fromOffset(x, y),
         Size = UDim2.fromOffset(w, h),
@@ -465,20 +413,12 @@ local function OutlineRect(
 
     Corner(obj, radius or 3)
     Stroke(obj, color, thick or 2)
-
     return obj
 end
 
---==================================================
--- V33 ICON HELPERS
---==================================================
+-- Approved V32 Actions helper.
 
--- Square-ended line used by the Actions star.
--- This preserves the approved V32 appearance.
-
-local function SharpLine(
-    parent, x1, y1, x2, y2, color, thick
-)
+local function SharpLine(parent, x1, y1, x2, y2, color, thick)
     local dx = x2 - x1
     local dy = y2 - y1
     local length = math.sqrt(dx * dx + dy * dy)
@@ -501,25 +441,18 @@ local function SharpLine(
             (ay + by) / 2
         ),
         Size = UDim2.fromOffset(
-            math.sqrt(
-                (bx - ax)^2 + (by - ay)^2
-            ),
+            math.sqrt((bx - ax)^2 + (by - ay)^2),
             thick
         ),
-        Rotation = math.deg(math.atan2(
-            by - ay,
-            bx - ax
-        )),
+        Rotation = math.deg(math.atan2(by - ay, bx - ax)),
         BackgroundColor3 = color,
         BorderSizePixel = 0
     }, parent)
 end
 
--- Smooth line for new microphone and gear outlines.
+-- Smooth paths for V34 reference icons.
 
-local function SmoothLine(
-    parent, x1, y1, x2, y2, color, thick
-)
+local function PathLine(parent, x1, y1, x2, y2, color, thick)
     local dx = x2 - x1
     local dy = y2 - y1
     local length = math.sqrt(dx * dx + dy * dy)
@@ -532,24 +465,106 @@ local function SmoothLine(
             (x1 + x2) / 2,
             (y1 + y2) / 2
         ),
-        Size = UDim2.fromOffset(
-            length + thick * 0.45,
-            thick
-        ),
+        Size = UDim2.fromOffset(length + 0.12, thick),
         Rotation = math.deg(math.atan2(dy, dx)),
         BackgroundColor3 = color,
         BorderSizePixel = 0
     }, parent)
 
-    Create("UICorner", {
-        CornerRadius = UDim.new(1, 0)
-    }, obj)
-
     return obj
 end
 
+local function Arc(parent, cx, cy, rx, ry, startAngle, endAngle, color, thick, segments)
+    segments = segments or 24
+
+    for i = 0, segments - 1 do
+        local a = startAngle + (endAngle - startAngle) * i / segments
+        local b = startAngle + (endAngle - startAngle) * (i + 1) / segments
+
+        PathLine(
+            parent,
+            cx + math.cos(a) * rx,
+            cy + math.sin(a) * ry,
+            cx + math.cos(b) * rx,
+            cy + math.sin(b) * ry,
+            color,
+            thick
+        )
+    end
+end
+
+local function RoundedPath(parent, points, color, thick)
+    -- Rounds each polygon corner with a short quadratic curve.
+
+    local count = #points
+    local rounded = {}
+
+    local function V(p)
+        return Vector2.new(p[1], p[2])
+    end
+
+    for i = 1, count do
+        local prev = V(points[(i - 2) % count + 1])
+        local curr = V(points[i])
+        local nextPoint = V(points[i % count + 1])
+
+        local before = curr - prev
+        local after = nextPoint - curr
+
+        local radius = math.min(
+            0.65,
+            before.Magnitude * 0.25,
+            after.Magnitude * 0.25
+        )
+
+        local entry = curr - before.Unit * radius
+        local exit = curr + after.Unit * radius
+
+        table.insert(rounded, {
+            entry = entry,
+            corner = curr,
+            exit = exit
+        })
+    end
+
+    for i = 1, count do
+        local item = rounded[i]
+        local nextItem = rounded[i % count + 1]
+
+        local previous = item.entry
+
+        for step = 1, 4 do
+            local t = step / 4
+            local u = 1 - t
+
+            local point =
+                item.entry * (u * u)
+                + item.corner * (2 * u * t)
+                + item.exit * (t * t)
+
+            PathLine(
+                parent,
+                previous.X, previous.Y,
+                point.X, point.Y,
+                color,
+                thick
+            )
+
+            previous = point
+        end
+
+        PathLine(
+            parent,
+            item.exit.X, item.exit.Y,
+            nextItem.entry.X, nextItem.entry.Y,
+            color,
+            thick
+        )
+    end
+end
+
 --==================================================
--- V33 ICONS
+-- V34 ICONS
 --==================================================
 
 local function DrawIcon(parent, kind, color)
@@ -561,7 +576,7 @@ local function DrawIcon(parent, kind, color)
 
     if kind == "commands" then
 
-        -- EXACT V32 COMMANDS ICON
+        -- APPROVED: UNCHANGED
 
         Line(holder, 5, 8, 10.5, 13, color, 2.2)
         Line(holder, 10.5, 13, 5, 18, color, 2.2)
@@ -570,111 +585,58 @@ local function DrawIcon(parent, kind, color)
     elseif kind == "voice" then
 
         --==================================================
-        -- V33 VOICE CHAT
-        -- CLEAN, SYMMETRICAL MICROPHONE
+        -- V34 MICROPHONE - USER REFERENCE
+        --
+        -- Narrow vertical capsule.
+        -- Curved cradle beneath.
+        -- Short downward stem.
+        -- NO horizontal base.
         --==================================================
 
         local cx = 13
-        local thickness = 1.85
+        local thick = 2.3
 
-        -- Microphone capsule.
+        -- Tall rounded capsule.
 
         OutlineRect(
             holder,
-            9.5, 2.5,
-            7, 13,
+            9.5, 3,
+            7, 14.5,
             color,
             3.5,
-            thickness
+            thick
         )
 
-        -- Symmetrical U-shaped microphone support.
+        -- Curved support follows the uploaded PNG.
         --
-        -- Center = X13
-        -- Left arm = X5.5
-        -- Right arm = X20.5
-        --
-        -- Bottom curve is constructed from a
-        -- mathematically symmetrical semicircle.
+        -- Ends sit just below the capsule midpoint.
+        -- Curve drops below the capsule.
+        -- Both sides are mathematically mirrored.
 
-        local radius = 7.5
-        local curveCenterY = 13
-
-        -- Left support.
-
-        SmoothLine(
+        Arc(
             holder,
-            cx - radius, 10,
-            cx - radius, curveCenterY,
+            cx, 14.2,
+            9, 7,
+            math.rad(170),
+            math.rad(10),
             color,
-            thickness
+            thick,
+            32
         )
 
-        -- Right support.
+        -- Short vertical stem only.
 
-        SmoothLine(
+        Line(
             holder,
-            cx + radius, 10,
-            cx + radius, curveCenterY,
+            cx, 20.8,
+            cx, 24,
             color,
-            thickness
-        )
-
-        -- Bottom semicircle.
-        --
-        -- Higher segment count makes the cradle
-        -- appear smoother at the final icon size.
-
-        local segments = 28
-
-        for i = 0, segments - 1 do
-            local a1 = math.pi
-                - (math.pi * i / segments)
-
-            local a2 = math.pi
-                - (math.pi * (i + 1) / segments)
-
-            local x1 = cx + radius * math.cos(a1)
-            local y1 = curveCenterY + radius * math.sin(a1)
-
-            local x2 = cx + radius * math.cos(a2)
-            local y2 = curveCenterY + radius * math.sin(a2)
-
-            SmoothLine(
-                holder,
-                x1, y1,
-                x2, y2,
-                color,
-                thickness
-            )
-        end
-
-        -- Stem.
-        -- Bottom of semicircle is Y20.5.
-
-        SmoothLine(
-            holder,
-            cx, 20.5,
-            cx, 23,
-            color,
-            thickness
-        )
-
-        -- Centered horizontal base.
-
-        SmoothLine(
-            holder,
-            9, 23,
-            17, 23,
-            color,
-            thickness
+            thick
         )
 
     elseif kind == "players" then
 
-        --==================================================
-        -- EXACT V32 PLAYERS ICON
-        --==================================================
+        -- APPROVED: UNCHANGED
 
         local background =
             color == C.purple and C.selected or C.side
@@ -697,9 +659,7 @@ local function DrawIcon(parent, kind, color)
         }, holder)
 
         Corner(frontBody, 6)
-
-        local bodyStroke = Stroke(frontBody, color, 2)
-        bodyStroke.ZIndex = 3
+        Stroke(frontBody, color, 2)
 
         local frontHead = Create("Frame", {
             Position = UDim2.fromOffset(5.5, 4.5),
@@ -713,20 +673,14 @@ local function DrawIcon(parent, kind, color)
             CornerRadius = UDim.new(1, 0)
         }, frontHead)
 
-        local headStroke = Stroke(frontHead, color, 2)
-        headStroke.ZIndex = 4
+        Stroke(frontHead, color, 2)
 
     elseif kind == "actions" then
 
-        --==================================================
-        -- EXACT V32 ACTIONS ICON
-        --==================================================
+        -- APPROVED V32: UNCHANGED
 
-        local cx = 13
-        local cy = 13
-
-        local outer = 11
-        local inner = 3
+        local cx, cy = 13, 13
+        local outer, inner = 11, 3
 
         local points = {
             {cx, cy - outer},
@@ -754,9 +708,7 @@ local function DrawIcon(parent, kind, color)
 
     elseif kind == "servers" then
 
-        --==================================================
-        -- EXACT V32 SERVERS ICON
-        --==================================================
+        -- APPROVED: UNCHANGED
 
         local function S(v)
             return v * 1.3
@@ -796,73 +748,74 @@ local function DrawIcon(parent, kind, color)
     elseif kind == "settings" then
 
         --==================================================
-        -- V33 SETTINGS
-        -- SIX-TOOTH SYMMETRICAL GEAR
+        -- V34 SETTINGS - USER SVG REFERENCE
+        --
+        -- Six rounded teeth.
+        -- Circular body.
+        -- Small centered circular opening.
         --==================================================
 
-        local cx = 13
-        local cy = 13
+        local cx, cy = 13, 13
 
-        local teeth = 6
-        local thickness = 1.8
+        -- Original SVG uses a 32x32 viewBox.
+        -- Scale its geometry into our 26x26 holder.
 
-        -- Each tooth uses identical angular dimensions.
-        -- This creates one continuous gear outline
-        -- instead of overlapping rectangular teeth.
+        local scale = 0.78
 
-        local innerRadius = 7.2
-        local outerRadius = 10.7
+        local function P(x, y)
+            return {
+                cx + (x - 16) * scale,
+                cy + (y - 16) * scale
+            }
+        end
+
+        -- Six identical tooth profiles, arranged
+        -- at 60-degree intervals around the center.
 
         local points = {}
+
+        local teeth = 6
+        local outer = 12.6
+        local valley = 8.0
 
         for i = 0, teeth - 1 do
             local centerAngle =
                 -math.pi / 2
                 + i * (2 * math.pi / teeth)
 
-            local offsets = {
-                {-0.46, innerRadius},
-                {-0.25, innerRadius},
-                {-0.18, outerRadius},
-                { 0.18, outerRadius},
-                { 0.25, innerRadius},
-                { 0.46, innerRadius}
+            local profile = {
+                {-0.52, valley},
+                {-0.32, valley},
+                {-0.23, outer},
+                { 0.23, outer},
+                { 0.32, valley},
+                { 0.52, valley}
             }
 
-            for _, item in ipairs(offsets) do
-                local angle = centerAngle + item[1]
-                local radius = item[2]
+            for _, part in ipairs(profile) do
+                local angle = centerAngle + part[1]
+                local radius = part[2]
 
                 table.insert(points, {
-                    cx + math.cos(angle) * radius,
-                    cy + math.sin(angle) * radius
+                    cx + math.cos(angle) * radius * scale,
+                    cy + math.sin(angle) * radius * scale
                 })
             end
         end
 
-        -- Connect the outer gear outline.
-
-        for i = 1, #points do
-            local a = points[i]
-            local b = points[i % #points + 1]
-
-            SmoothLine(
-                holder,
-                a[1], a[2],
-                b[1], b[2],
-                color,
-                thickness
-            )
-        end
-
-        -- Center hole.
+        RoundedPath(
+            holder,
+            points,
+            color,
+            1.85
+        )
 
         Circle(
             holder,
             cx, cy,
-            3.2,
+            3.15,
             color,
-            thickness
+            1.85
         )
     end
 
@@ -1570,7 +1523,7 @@ local Brand = Label(Sidebar, "KHASTIFY", 16, C.text, true)
 Brand.Position = UDim2.fromOffset(24, 31)
 Brand.Size = UDim2.fromOffset(135, 25)
 
-local Version = Label(Sidebar, "universal hub v33", 11, C.muted)
+local Version = Label(Sidebar, "universal hub v34", 11, C.muted)
 Version.Position = UDim2.fromOffset(24, 57)
 Version.Size = UDim2.fromOffset(135, 19)
 
@@ -1616,7 +1569,7 @@ local Minimize = Create("TextButton", {
 }, Topbar)
 
 --==================================================
--- SEARCH
+-- SEARCH / CATEGORIES / LIST
 --==================================================
 
 local SearchFrame = Create("Frame", {
@@ -2403,8 +2356,7 @@ Bind(Players.PlayerRemoving, function()
 end)
 
 --==================================================
--- V33 SERVER BROWSER
--- NO PREVIOUS SERVER HISTORY
+-- SERVER BROWSER
 --==================================================
 
 local ServerBrowser = {
@@ -2668,7 +2620,8 @@ local function ServerCard(server, index, current)
     ServerBrowser.cards[key] = {
         frame = card,
         expand = Expand,
-        current = current
+        current = current,
+        population = population
     }
 
     Bind(click.MouseButton1Click, function()
@@ -2797,18 +2750,18 @@ LoadServerPage = function(reset)
 end
 
 --==================================================
--- V33 SERVERS PAGE
+-- V34 SERVERS PAGE - ALL RESTORED
 --==================================================
 
 Sections.Servers = function()
-    -- No All / Previous subsection buttons.
-
     CurrentCategory = "All"
-    CategoryCallback = nil
+
+    -- V34: Restore the All subsection.
+    -- Previous is intentionally not included.
+
+    AddCategory("All")
 
     SearchBox.PlaceholderText = "search servers..."
-
-    -- Current server pinned first.
 
     if game.JobId ~= "" then
         ServerCard({
@@ -2818,8 +2771,6 @@ Sections.Servers = function()
             maxPlayers = Players.MaxPlayers
         }, 0, true)
     end
-
-    -- Public servers.
 
     local info = Label(
         List,
@@ -2832,8 +2783,6 @@ Sections.Servers = function()
     info.LayoutOrder = 2
 
     ServerBrowser.status = info
-
-    -- Refresh button.
 
     local refreshCard = MakeCard(51, 1000000)
 
@@ -2852,8 +2801,6 @@ Sections.Servers = function()
             LoadServerPage(true)
         end
     end)
-
-    -- Load more button.
 
     local moreCard = MakeCard(51, 999999)
 
@@ -2920,8 +2867,6 @@ end
 Sections.Settings = function()
     AddCategory("All")
     SectionTitle("General")
-
-    -- AUTO EXECUTE
 
     local autoCard = MakeCard(74)
 
@@ -3332,16 +3277,22 @@ Bind(Run.Heartbeat, function()
         UpdateInvisible()
     end
 
-    -- Update current server population.
-
     if Active == "Servers" then
         local key =
             tostring(game.PlaceId) .. ":" .. game.JobId
 
         local data = ServerBrowser.cards[key]
 
-        if data and data.frame and data.frame.Parent then
-            -- Current server remains pinned.
+        if data and data.population and data.population.Parent then
+            local value =
+                tostring(#Players:GetPlayers())
+                .. "/"
+                .. tostring(Players.MaxPlayers)
+                .. " Players"
+
+            if data.population.Text ~= value then
+                data.population.Text = value
+            end
         end
     end
 end)
@@ -3489,16 +3440,15 @@ _G.KHASTIFY_HUB_CLEANUP = function()
     end
 
     GUI:Destroy()
-
     _G.KHASTIFY_HUB_CLEANUP = nil
 end
 
 print("====================================")
-print("KHASTIFY'S UNIVERSAL HUB V33")
-print("NEW SIX-TOOTH SETTINGS GEAR")
-print("REDESIGNED VOICE CHAT MICROPHONE")
-print("PREVIOUS SERVER SECTION REMOVED")
+print("KHASTIFY'S UNIVERSAL HUB V34")
+print("REFERENCE MICROPHONE ICON")
+print("REFERENCE SIX-TOOTH GEAR ICON")
+print("SERVERS > ALL RESTORED")
+print("PREVIOUS SERVERS REMOVED")
 print("AUTO EXECUTE PRESERVED")
-print("COMMANDS / PLAYERS / ACTIONS / SERVERS ICONS PRESERVED")
 print("Press " .. State.menuKey .. " to open.")
 print("====================================")
