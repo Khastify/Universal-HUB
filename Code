@@ -1,33 +1,30 @@
 --[[
-    KHASTIFY'S UNIVERSAL HUB V28
+    KHASTIFY'S UNIVERSAL HUB V29
 
-    NEW:
-    - Servers: All / Previous subsections
-    - Current server pinned in both subsections
-    - Saves last 5 DIFFERENT servers across games
-    - Shows saved game names in Previous
-    - Rejoin Current Server
-    - Join Previous Server
-    - Inverse button colors on highlighted cards
-    - Redesigned Voice Chat, Players, Actions, Settings icons
+    V29:
+    - Fixed gaps in Actions diamond star
+    - Players: left person in front, no visible overlapping outlines
+    - Voice Chat: redesigned microphone
+    - Commands, Servers and Settings icons preserved
 
-    PRESERVED:
-    - Commands >_ icon
-    - Servers icon
-    - Sidebar size, spacing and colors
-    - Fly, Noclip, Dash, Infinite Jump
-    - Air Walk, Click TP, Headless
-    - 11-stud invisibility
-    - Player browser and dropdowns
+    V28 FEATURES RETAINED:
+    - All / Previous server sections
+    - Last 5 different servers saved across games
+    - Current server pinned in both sections
+    - Rejoin Server / Join Server
+    - Inverse dropdown button colors
     - Public server browser
-    - Custom keybinds
+    - Automatic player list
+    - Movement and character commands
+    - 11-stud invisibility
+    - Custom hotkeys
 
     K = Show / hide hub
     Q = Dash
 ]]
 
 --==================================================
--- SERVICES
+-- SERVICES AND CLEANUP
 --==================================================
 
 local Players = game:GetService("Players")
@@ -45,9 +42,7 @@ if _G.KHASTIFY_HUB_CLEANUP then
     pcall(_G.KHASTIFY_HUB_CLEANUP)
 end
 
-local Parent = (gethui and gethui())
-    or LP:WaitForChild("PlayerGui")
-
+local Parent = (gethui and gethui()) or LP:WaitForChild("PlayerGui")
 local Old = Parent:FindFirstChild("KhastifyUniversalHub")
 if Old then Old:Destroy() end
 
@@ -98,52 +93,33 @@ local State = {
     uiY = 0.5
 }
 
-local Keybinds = {
-    Dash = "Q"
-}
-
+local Keybinds = {Dash = "Q"}
 local SaveFile = "KHASTIFY_Universal_Hub_Settings.json"
 
 local function ReadJSON(filename)
-    if type(readfile) ~= "function" then
-        return nil
-    end
+    if type(readfile) ~= "function" then return nil end
 
     local ok, result = pcall(function()
         return HttpService:JSONDecode(readfile(filename))
     end)
 
-    if ok and type(result) == "table" then
-        return result
-    end
-
-    return nil
+    return ok and type(result) == "table" and result or nil
 end
 
 local function WriteJSON(filename, data)
-    if type(writefile) ~= "function" then
-        return false
-    end
+    if type(writefile) ~= "function" then return false end
 
-    local ok = pcall(function()
-        writefile(
-            filename,
-            HttpService:JSONEncode(data)
-        )
+    return pcall(function()
+        writefile(filename, HttpService:JSONEncode(data))
     end)
-
-    return ok
 end
 
 do
     local saved = ReadJSON(SaveFile)
 
     if saved then
-        local values = saved.state or saved
-
-        for key, value in pairs(values) do
-            if State[key] ~= nil
-                and type(value) == type(State[key]) then
+        for key, value in pairs(saved.state or saved) do
+            if State[key] ~= nil and type(value) == type(State[key]) then
                 State[key] = value
             end
         end
@@ -152,8 +128,7 @@ do
             Keybinds = {}
 
             for name, key in pairs(saved.keybinds) do
-                if type(name) == "string"
-                    and type(key) == "string" then
+                if type(name) == "string" and type(key) == "string" then
                     Keybinds[name] = key
                 end
             end
@@ -177,7 +152,7 @@ local function Save()
 end
 
 --==================================================
--- V28 SERVER HISTORY
+-- SERVER HISTORY
 --==================================================
 
 local HistoryFile = "KHASTIFY_Server_History.json"
@@ -191,8 +166,7 @@ local function ValidServer(entry)
 end
 
 local function SameServer(a, b)
-    return ValidServer(a)
-        and ValidServer(b)
+    return ValidServer(a) and ValidServer(b)
         and a.placeId == b.placeId
         and a.jobId == b.jobId
 end
@@ -200,18 +174,16 @@ end
 local function GetGameName()
     local name = game.Name
 
-    local ok, info = pcall(function()
-        return MarketplaceService:GetProductInfo(
+    pcall(function()
+        local info = MarketplaceService:GetProductInfo(
             game.PlaceId,
             Enum.InfoType.Asset
         )
-    end)
 
-    if ok and type(info) == "table"
-        and type(info.Name) == "string"
-        and info.Name ~= "" then
-        name = info.Name
-    end
+        if info and type(info.Name) == "string" and info.Name ~= "" then
+            name = info.Name
+        end
+    end)
 
     return name
 end
@@ -229,9 +201,7 @@ local ServerHistory = {
 }
 
 local function NormalizeEntry(entry)
-    if not ValidServer(entry) then
-        return nil
-    end
+    if not ValidServer(entry) then return nil end
 
     return {
         placeId = entry.placeId,
@@ -250,8 +220,9 @@ end
 local function AddPreviousServer(entry)
     entry = NormalizeEntry(entry)
 
-    if not entry then return end
-    if SameServer(entry, CurrentServerInfo) then return end
+    if not entry or SameServer(entry, CurrentServerInfo) then
+        return
+    end
 
     for i = #ServerHistory.previous, 1, -1 do
         if SameServer(ServerHistory.previous[i], entry) then
@@ -270,17 +241,11 @@ do
     local saved = ReadJSON(HistoryFile)
 
     if saved then
-        -- Load existing previous servers first.
-        -- Then promote the old current server to the top
-        -- if the player has joined a different server.
-
         if type(saved.previous) == "table" then
             for _, entry in ipairs(saved.previous) do
                 local normalized = NormalizeEntry(entry)
 
-                if normalized
-                    and not SameServer(normalized, CurrentServerInfo) then
-
+                if normalized and not SameServer(normalized, CurrentServerInfo) then
                     local duplicate = false
 
                     for _, existing in ipairs(ServerHistory.previous) do
@@ -291,10 +256,7 @@ do
                     end
 
                     if not duplicate then
-                        table.insert(
-                            ServerHistory.previous,
-                            normalized
-                        )
+                        table.insert(ServerHistory.previous, normalized)
                     end
                 end
             end
@@ -302,8 +264,7 @@ do
 
         local oldCurrent = NormalizeEntry(saved.current)
 
-        if oldCurrent
-            and not SameServer(oldCurrent, CurrentServerInfo) then
+        if oldCurrent and not SameServer(oldCurrent, CurrentServerInfo) then
             AddPreviousServer(oldCurrent)
         end
     end
@@ -312,7 +273,6 @@ do
         table.remove(ServerHistory.previous)
     end
 
-    ServerHistory.current = CurrentServerInfo
     SaveServerHistory()
 end
 
@@ -323,17 +283,13 @@ end
 local C = {
     bg = Color3.fromRGB(9, 10, 15),
     side = Color3.fromRGB(8, 9, 13),
-
     card = Color3.fromRGB(17, 18, 25),
     hover = Color3.fromRGB(23, 24, 34),
     selected = Color3.fromRGB(27, 21, 42),
-
     border = Color3.fromRGB(32, 33, 45),
-
     text = Color3.fromRGB(240, 239, 247),
     muted = Color3.fromRGB(142, 143, 161),
     faint = Color3.fromRGB(96, 98, 116),
-
     purple = Color3.fromRGB(157, 91, 255),
     green = Color3.fromRGB(103, 215, 153)
 }
@@ -371,14 +327,9 @@ local function Label(parent, value, size, color, bold)
     return Create("TextLabel", {
         BackgroundTransparency = 1,
         BorderSizePixel = 0,
-
         Text = value,
         TextColor3 = color or C.text,
-
-        Font = bold
-            and Enum.Font.GothamBold
-            or Enum.Font.Gotham,
-
+        Font = bold and Enum.Font.GothamBold or Enum.Font.Gotham,
         TextSize = size or 14,
         TextXAlignment = Enum.TextXAlignment.Left,
         TextYAlignment = Enum.TextYAlignment.Center,
@@ -402,7 +353,7 @@ local function Tween(obj, properties, duration)
 end
 
 --==================================================
--- ICON PRIMITIVES
+-- ICON DRAWING
 --==================================================
 
 local function Line(parent, x1, y1, x2, y2, color, thick)
@@ -416,15 +367,9 @@ local function Line(parent, x1, y1, x2, y2, color, thick)
 
     local obj = Create("Frame", {
         AnchorPoint = Vector2.new(0.5, 0.5),
-
-        Position = UDim2.fromOffset(
-            (x1 + x2) / 2,
-            (y1 + y2) / 2
-        ),
-
+        Position = UDim2.fromOffset((x1 + x2) / 2, (y1 + y2) / 2),
         Size = UDim2.fromOffset(length, thick),
         Rotation = math.deg(math.atan2(dy, dx)),
-
         BackgroundColor3 = color,
         BorderSizePixel = 0
     }, parent)
@@ -438,16 +383,8 @@ end
 
 local function Dot(parent, x, y, radius, color)
     local obj = Create("Frame", {
-        Position = UDim2.fromOffset(
-            x - radius,
-            y - radius
-        ),
-
-        Size = UDim2.fromOffset(
-            radius * 2,
-            radius * 2
-        ),
-
+        Position = UDim2.fromOffset(x - radius, y - radius),
+        Size = UDim2.fromOffset(radius * 2, radius * 2),
         BackgroundColor3 = color,
         BorderSizePixel = 0
     }, parent)
@@ -461,16 +398,8 @@ end
 
 local function Circle(parent, x, y, radius, color, thick)
     local obj = Create("Frame", {
-        Position = UDim2.fromOffset(
-            x - radius,
-            y - radius
-        ),
-
-        Size = UDim2.fromOffset(
-            radius * 2,
-            radius * 2
-        ),
-
+        Position = UDim2.fromOffset(x - radius, y - radius),
+        Size = UDim2.fromOffset(radius * 2, radius * 2),
         BackgroundTransparency = 1,
         BorderSizePixel = 0
     }, parent)
@@ -483,9 +412,7 @@ local function Circle(parent, x, y, radius, color, thick)
     return obj
 end
 
-local function OutlineRect(
-    parent, x, y, w, h, color, radius, thick
-)
+local function OutlineRect(parent, x, y, w, h, color, radius, thick)
     local obj = Create("Frame", {
         Position = UDim2.fromOffset(x, y),
         Size = UDim2.fromOffset(w, h),
@@ -500,12 +427,8 @@ local function OutlineRect(
 end
 
 --==================================================
--- V28 SIDEBAR ICONS
+-- V29 ICONS
 --==================================================
-
--- Commands and Servers retain their original shapes.
--- The other four use the same basic Roblox GUI
--- primitives instead of dozens of tiny path segments.
 
 local function DrawIcon(parent, kind, color)
     color = color or C.muted
@@ -518,7 +441,7 @@ local function DrawIcon(parent, kind, color)
 
     if kind == "commands" then
 
-        -- UNCHANGED.
+        -- EXACT V28 COMMANDS ICON
 
         Line(holder, 5, 8, 10.5, 13, color, 2.2)
         Line(holder, 10.5, 13, 5, 18, color, 2.2)
@@ -526,101 +449,143 @@ local function DrawIcon(parent, kind, color)
 
     elseif kind == "voice" then
 
-        -- Rounded microphone.
-        OutlineRect(
-            holder,
-            10, 3,
-            6, 13,
-            color, 4, 2
-        )
+        --==================================================
+        -- V29 MICROPHONE
+        -- Rounded capsule with a U-shaped support.
+        -- All visible strokes approximately 2px.
+        --==================================================
 
-        -- Connected-looking microphone arms.
-        Line(holder, 5, 10, 5, 14, color, 2)
-        Line(holder, 21, 10, 21, 14, color, 2)
+        -- Draw support as a rounded frame, clipped so
+        -- only its lower U-shaped portion remains.
 
-        -- Curved cradle made from a rounded lower frame.
-        local cradle = Create("Frame", {
-            Position = UDim2.fromOffset(5, 10),
-            Size = UDim2.fromOffset(16, 11),
+        local supportClip = Create("Frame", {
+            Position = UDim2.fromOffset(3, 10),
+            Size = UDim2.fromOffset(20, 12),
+            BackgroundTransparency = 1,
+            BorderSizePixel = 0,
+            ClipsDescendants = true
+        }, holder)
+
+        local support = Create("Frame", {
+            Position = UDim2.fromOffset(2, -7),
+            Size = UDim2.fromOffset(16, 18),
             BackgroundTransparency = 1,
             BorderSizePixel = 0
-        }, holder)
+        }, supportClip)
 
-        Corner(cradle, 8)
-        Stroke(cradle, color, 2)
+        Corner(support, 9)
+        Stroke(support, color, 2)
 
-        -- Mask upper portion so the cradle reads as a U.
-        -- Uses the sidebar background for a clean opening.
-        -- The side arms remain visible.
-        local mask = Create("Frame", {
-            Position = UDim2.fromOffset(7, 7),
-            Size = UDim2.fromOffset(12, 7),
-            BackgroundColor3 = C.side,
-            BorderSizePixel = 0,
-            ZIndex = 2
-        }, holder)
+        -- Microphone capsule is drawn separately.
+        -- No background-colored masks are used.
 
-        -- Redraw microphone above the mask.
-        local mic = OutlineRect(
+        OutlineRect(
             holder,
-            10, 3,
-            6, 13,
+            9.5, 2.5,
+            7, 14,
             color, 4, 2
         )
-        mic.ZIndex = 3
 
+        -- The vertical stem meets the cradle.
         Line(holder, 13, 21, 13, 23, color, 2)
+
+        -- Base.
         Line(holder, 9, 23, 17, 23, color, 2)
 
     elseif kind == "players" then
 
-        -- Two recognizable people.
-        -- Rear person.
-        Circle(holder, 18, 8, 3, color, 2)
+        --==================================================
+        -- V29 PLAYERS
+        -- Back person is drawn first.
+        -- Front person is drawn above with a matching
+        -- background fill to hide overlapping outlines.
+        --==================================================
 
-        local rear = OutlineRect(
+        local background = color == C.purple
+            and C.selected or C.side
+
+        -- BACK PERSON
+
+        Circle(holder, 18.5, 8, 3, color, 2)
+
+        OutlineRect(
             holder,
             13, 14,
             11, 8,
             color, 5, 2
         )
 
-        -- Front person.
-        Circle(holder, 9, 8, 4, color, 2)
+        -- FRONT PERSON
+        -- The fill masks the rear person's lines.
 
-        local front = OutlineRect(
-            holder,
-            2, 15,
-            15, 8,
-            color, 6, 2
-        )
+        local frontBody = Create("Frame", {
+            Position = UDim2.fromOffset(2, 15),
+            Size = UDim2.fromOffset(15, 8),
+            BackgroundColor3 = background,
+            BorderSizePixel = 0,
+            ZIndex = 3
+        }, holder)
 
-        -- The rounded rectangles form the shoulders
-        -- and upper-body silhouettes.
-        rear.BackgroundTransparency = 1
-        front.BackgroundTransparency = 1
+        Corner(frontBody, 6)
+
+        local bodyStroke = Stroke(frontBody, color, 2)
+        bodyStroke.ZIndex = 3
+
+        local frontHead = Create("Frame", {
+            Position = UDim2.fromOffset(5.5, 4.5),
+            Size = UDim2.fromOffset(8, 8),
+            BackgroundColor3 = background,
+            BorderSizePixel = 0,
+            ZIndex = 4
+        }, holder)
+
+        Create("UICorner", {
+            CornerRadius = UDim.new(1, 0)
+        }, frontHead)
+
+        local headStroke = Stroke(frontHead, color, 2)
+        headStroke.ZIndex = 4
 
     elseif kind == "actions" then
 
-        -- Four-point diamond star.
-        -- Four long strokes, like the Commands icon.
-        -- Hollow center with inward-facing corners.
+        --==================================================
+        -- V29 DIAMOND STAR
+        -- Same V28 shape, with reinforced joints.
+        --==================================================
 
-        Line(holder, 13, 2, 16, 10, color, 2)
-        Line(holder, 16, 10, 24, 13, color, 2)
+        local points = {
+            {13, 2},
+            {16, 10},
+            {24, 13},
+            {16, 16},
+            {13, 24},
+            {10, 16},
+            {2, 13},
+            {10, 10}
+        }
 
-        Line(holder, 24, 13, 16, 16, color, 2)
-        Line(holder, 16, 16, 13, 24, color, 2)
+        for i = 1, #points do
+            local a = points[i]
+            local b = points[i % #points + 1]
 
-        Line(holder, 13, 24, 10, 16, color, 2)
-        Line(holder, 10, 16, 2, 13, color, 2)
+            Line(
+                holder,
+                a[1], a[2],
+                b[1], b[2],
+                color, 2
+            )
+        end
 
-        Line(holder, 2, 13, 10, 10, color, 2)
-        Line(holder, 10, 10, 13, 2, color, 2)
+        -- Reinforce each corner with a circular join.
+        -- This covers the tiny gaps visible in V28.
+
+        for _, point in ipairs(points) do
+            Dot(holder, point[1], point[2], 1, color)
+        end
 
     elseif kind == "servers" then
 
-        -- UNCHANGED.
+        -- EXACT V28 SERVERS ICON
 
         local function S(v)
             return v * 1.3
@@ -643,42 +608,26 @@ local function DrawIcon(parent, kind, color)
         Dot(holder, S(5.5), S(5.5), S(1), color)
         Dot(holder, S(5.5), S(14.5), S(1), color)
 
-        Line(
-            holder,
-            S(10), S(5.5),
-            S(15), S(5.5),
-            color, 1.6
-        )
-
-        Line(
-            holder,
-            S(10), S(14.5),
-            S(15), S(14.5),
-            color, 1.6
-        )
+        Line(holder, S(10), S(5.5), S(15), S(5.5), color, 1.6)
+        Line(holder, S(10), S(14.5), S(15), S(14.5), color, 1.6)
 
     elseif kind == "settings" then
 
-        -- Gear constructed with the same Frame
-        -- and UIStroke technique as Servers.
+        -- EXACT V28 SETTINGS ICON
 
         local cx, cy = 13, 13
 
-        -- Eight evenly spaced gear teeth.
         for i = 0, 7 do
             local angle = math.rad(i * 45)
 
             local tooth = Create("Frame", {
                 AnchorPoint = Vector2.new(0.5, 0.5),
-
                 Position = UDim2.fromOffset(
                     cx + math.sin(angle) * 8.2,
                     cy - math.cos(angle) * 8.2
                 ),
-
                 Size = UDim2.fromOffset(5, 6),
                 Rotation = i * 45,
-
                 BackgroundTransparency = 1,
                 BorderSizePixel = 0
             }, holder)
@@ -931,9 +880,7 @@ local function MakeVisual()
     clone.Name = "KHASTIFY_TransparentAvatar"
 
     for _, obj in ipairs(clone:GetDescendants()) do
-        if obj:IsA("Script")
-            or obj:IsA("LocalScript") then
-
+        if obj:IsA("Script") or obj:IsA("LocalScript") then
             obj:Destroy()
 
         elseif obj:IsA("JointInstance")
@@ -953,17 +900,11 @@ local function MakeVisual()
             if obj.Name == "HumanoidRootPart" then
                 obj.Transparency = 1
             else
-                obj.Transparency = math.max(
-                    obj.Transparency, 0.3
-                )
+                obj.Transparency = math.max(obj.Transparency, 0.3)
             end
 
-        elseif obj:IsA("Decal")
-            or obj:IsA("Texture") then
-
-            obj.Transparency = math.max(
-                obj.Transparency, 0.3
-            )
+        elseif obj:IsA("Decal") or obj:IsA("Texture") then
+            obj.Transparency = math.max(obj.Transparency, 0.3)
 
         elseif obj:IsA("ParticleEmitter")
             or obj:IsA("Trail")
@@ -1033,9 +974,7 @@ local function SetBodyY(y)
     local delta = y - r.Position.Y
 
     if math.abs(delta) > 0.001 then
-        c:PivotTo(
-            c:GetPivot() + Vector3.new(0, delta, 0)
-        )
+        c:PivotTo(c:GetPivot() + Vector3.new(0, delta, 0))
     end
 end
 
@@ -1085,9 +1024,7 @@ local function SetInvisible(enabled)
 
     if not enabled then
         if InvisibleActive and c then
-            c:PivotTo(
-                c:GetPivot() + Vector3.new(0, OFFSET, 0)
-            )
+            c:PivotTo(c:GetPivot() + Vector3.new(0, OFFSET, 0))
 
             if r then
                 r.AssemblyLinearVelocity = Vector3.zero
@@ -1105,7 +1042,6 @@ local function SetInvisible(enabled)
 
         FloorY = nil
         LastGroundY = nil
-
         return
     end
 
@@ -1137,16 +1073,13 @@ local function SetInvisible(enabled)
 
     for _, part in ipairs(c:GetDescendants()) do
         if part:IsA("BasePart") then
-            Transparency[part] =
-                part.LocalTransparencyModifier
+            Transparency[part] = part.LocalTransparencyModifier
         end
     end
 
     Noclip()
 
-    c:PivotTo(
-        c:GetPivot() + Vector3.new(0, -OFFSET, 0)
-    )
+    c:PivotTo(c:GetPivot() + Vector3.new(0, -OFFSET, 0))
 
     r.AssemblyLinearVelocity = Vector3.zero
     r.AssemblyAngularVelocity = Vector3.zero
@@ -1172,8 +1105,7 @@ local function SetInvisible(enabled)
         camera.CameraSubject = h
 
         h.CameraOffset =
-            OriginalCameraOffset
-            + Vector3.new(0, OFFSET, 0)
+            OriginalCameraOffset + Vector3.new(0, OFFSET, 0)
     end
 end
 
@@ -1186,12 +1118,7 @@ local function UpdateInvisible()
     Noclip()
 
     local p = r.Position
-
-    local ground = GroundAt(
-        p.X,
-        p.Z,
-        p.Y + OFFSET
-    )
+    local ground = GroundAt(p.X, p.Z, p.Y + OFFSET)
 
     if ground then
         local difference = ground - LastGroundY
@@ -1225,9 +1152,7 @@ local function UpdateInvisible()
             local v = r.AssemblyLinearVelocity
 
             r.AssemblyLinearVelocity = Vector3.new(
-                v.X,
-                math.max(0, v.Y),
-                v.Z
+                v.X, math.max(0, v.Y), v.Z
             )
 
         elseif r.Position.Y > maximumY then
@@ -1236,9 +1161,7 @@ local function UpdateInvisible()
             local v = r.AssemblyLinearVelocity
 
             r.AssemblyLinearVelocity = Vector3.new(
-                v.X,
-                math.min(0, v.Y),
-                v.Z
+                v.X, math.min(0, v.Y), v.Z
             )
         end
     end
@@ -1258,16 +1181,13 @@ local function SetHeadless(enabled)
 
     if enabled then
         if HeadTransparency[head] == nil then
-            HeadTransparency[head] =
-                head.LocalTransparencyModifier
+            HeadTransparency[head] = head.LocalTransparencyModifier
         end
 
         head.LocalTransparencyModifier = 1
 
         for _, obj in ipairs(head:GetDescendants()) do
-            if obj:IsA("Decal")
-                or obj:IsA("Texture") then
-
+            if obj:IsA("Decal") or obj:IsA("Texture") then
                 if HeadDecals[obj] == nil then
                     HeadDecals[obj] = obj.Transparency
                 end
@@ -1335,8 +1255,7 @@ local function SelfFling()
         math.random(-120, 120)
     )
 
-    r.AssemblyAngularVelocity =
-        Vector3.new(15, 20, 15)
+    r.AssemblyAngularVelocity = Vector3.new(15, 20, 15)
 end
 
 local function Wave()
@@ -1386,14 +1305,11 @@ local SIDE = 174
 
 local Window = Create("Frame", {
     Name = "Window",
-
     Size = UDim2.fromOffset(WIDTH, HEIGHT),
-
     Position = UDim2.new(
         State.uiX, -WIDTH / 2,
         State.uiY, -HEIGHT / 2
     ),
-
     BackgroundColor3 = C.bg,
     BorderSizePixel = 0,
     ClipsDescendants = true
@@ -1425,17 +1341,11 @@ Create("Frame", {
     BorderSizePixel = 0
 }, Sidebar)
 
-local Brand = Label(
-    Sidebar, "KHASTIFY", 16, C.text, true
-)
-
+local Brand = Label(Sidebar, "KHASTIFY", 16, C.text, true)
 Brand.Position = UDim2.fromOffset(24, 31)
 Brand.Size = UDim2.fromOffset(135, 25)
 
-local Version = Label(
-    Sidebar, "universal hub v28", 11, C.muted
-)
-
+local Version = Label(Sidebar, "universal hub v29", 11, C.muted)
 Version.Position = UDim2.fromOffset(24, 57)
 Version.Size = UDim2.fromOffset(135, 19)
 
@@ -1456,10 +1366,7 @@ local HeadingIcon = Create("Frame", {
     BackgroundTransparency = 1
 }, Topbar)
 
-local Heading = Label(
-    Topbar, "commands", 18, C.text, true
-)
-
+local Heading = Label(Topbar, "commands", 18, C.text, true)
 Heading.Position = UDim2.fromOffset(55, 15)
 Heading.Size = UDim2.new(1, -148, 0, 30)
 
@@ -1484,7 +1391,7 @@ local Minimize = Create("TextButton", {
 }, Topbar)
 
 --==================================================
--- SEARCH
+-- SEARCH AND CONTENT
 --==================================================
 
 local SearchFrame = Create("Frame", {
@@ -1501,14 +1408,11 @@ DrawSearchIcon(SearchFrame)
 local SearchBox = Create("TextBox", {
     Position = UDim2.fromOffset(46, 0),
     Size = UDim2.new(1, -62, 1, 0),
-
     BackgroundTransparency = 1,
     Text = "",
     PlaceholderText = "search commands...",
-
     PlaceholderColor3 = C.faint,
     TextColor3 = C.text,
-
     Font = Enum.Font.Gotham,
     TextSize = 14,
     TextXAlignment = Enum.TextXAlignment.Left,
@@ -1529,19 +1433,14 @@ local CategoryLayout = Create("UIListLayout", {
 
 local List = Create("ScrollingFrame", {
     Name = "FeatureList",
-
     Position = UDim2.fromOffset(17, 174),
     Size = UDim2.new(1, -34, 1, -190),
-
     BackgroundTransparency = 1,
     BorderSizePixel = 0,
-
     ScrollBarThickness = 3,
     ScrollBarImageColor3 = C.purple,
-
     CanvasSize = UDim2.fromOffset(0, 0),
     ScrollingDirection = Enum.ScrollingDirection.Y,
-
     AutomaticCanvasSize = Enum.AutomaticSize.None,
     ClipsDescendants = true
 }, Main)
@@ -1558,15 +1457,12 @@ local ListLayout = Create("UIListLayout", {
     SortOrder = Enum.SortOrder.LayoutOrder
 }, List)
 
-Bind(
-    ListLayout:GetPropertyChangedSignal("AbsoluteContentSize"),
-    function()
-        List.CanvasSize = UDim2.fromOffset(
-            0,
-            ListLayout.AbsoluteContentSize.Y + 20
-        )
-    end
-)
+Bind(ListLayout:GetPropertyChangedSignal("AbsoluteContentSize"), function()
+    List.CanvasSize = UDim2.fromOffset(
+        0,
+        ListLayout.AbsoluteContentSize.Y + 20
+    )
+end)
 
 --==================================================
 -- SIDEBAR
@@ -1599,7 +1495,6 @@ for i, entry in ipairs(Navigation) do
         Name = name .. "Tab",
         Position = UDim2.fromOffset(12, y),
         Size = UDim2.fromOffset(TAB_WIDTH, TAB_HEIGHT),
-
         BackgroundColor3 = C.side,
         BorderSizePixel = 0,
         Text = "",
@@ -1618,16 +1513,12 @@ for i, entry in ipairs(Navigation) do
     local nameLabel = Create("TextLabel", {
         Position = UDim2.fromOffset(52, -1),
         Size = UDim2.new(1, -60, 1, 0),
-
         BackgroundTransparency = 1,
         BorderSizePixel = 0,
-
         Text = name,
         TextColor3 = C.muted,
-
         Font = Enum.Font.GothamMedium,
         TextSize = TAB_FONT_SIZE,
-
         TextXAlignment = Enum.TextXAlignment.Left,
         TextYAlignment = Enum.TextYAlignment.Center,
         TextTruncate = Enum.TextTruncate.AtEnd
@@ -1637,7 +1528,6 @@ for i, entry in ipairs(Navigation) do
         AnchorPoint = Vector2.new(0, 0.5),
         Position = UDim2.new(1, -5, 0.5, 0),
         Size = UDim2.fromOffset(3, 27),
-
         BackgroundColor3 = C.purple,
         BorderSizePixel = 0,
         Visible = false
@@ -1690,16 +1580,12 @@ local function UpdateHeadingIcon(name)
     local data = NavButtons[name]
 
     if data then
-        DrawSidebarIcon(
-            HeadingIcon,
-            data.kind,
-            C.purple
-        )
+        DrawSidebarIcon(HeadingIcon, data.kind, C.purple)
     end
 end
 
 --==================================================
--- COMMANDS / KEYBINDS
+-- COMMANDS AND KEYBINDS
 --==================================================
 
 local Commands = {}
@@ -1767,8 +1653,7 @@ local ShowSection
 
 local function ClearList()
     for _, obj in ipairs(List:GetChildren()) do
-        if obj ~= ListLayout
-            and not obj:IsA("UIPadding") then
+        if obj ~= ListLayout and not obj:IsA("UIPadding") then
             obj:Destroy()
         end
     end
@@ -1818,8 +1703,7 @@ local function Filter()
                 or CurrentCategory == "All"
                 or entry.category == CurrentCategory
 
-            entry.object.Visible =
-                matches and categoryMatches
+            entry.object.Visible = matches and categoryMatches
         end
     end
 end
@@ -1832,18 +1716,12 @@ local function AddCategory(name)
             math.max(61, #name * 8 + 24),
             29
         ),
-
         BackgroundColor3 =
-            CurrentCategory == name
-            and C.selected or C.bg,
-
+            CurrentCategory == name and C.selected or C.bg,
         BorderSizePixel = 0,
         Text = name,
-
         TextColor3 =
-            CurrentCategory == name
-            and C.text or C.muted,
-
+            CurrentCategory == name and C.text or C.muted,
         Font = Enum.Font.GothamMedium,
         TextSize = 12
     }, Categories)
@@ -1875,13 +1753,9 @@ local function AddCategory(name)
 end
 
 local function SectionTitle(value, order)
-    local title = Label(
-        List, value:upper(), 12, C.muted, true
-    )
-
+    local title = Label(List, value:upper(), 12, C.muted, true)
     title.Size = UDim2.new(1, 0, 0, 27)
     title.LayoutOrder = order or 0
-
     return title
 end
 
@@ -1896,13 +1770,10 @@ local function MakeCard(height, order)
 
     Corner(card, 9)
     Stroke(card)
-
     return card
 end
 
-local function Feature(
-    name, category, description, callback, allowKeybind
-)
+local function Feature(name, category, description, callback, allowKeybind)
     local card = MakeCard(60)
 
     local clickArea = Create("TextButton", {
@@ -1916,10 +1787,7 @@ local function Feature(
     title.Position = UDim2.fromOffset(15, 8)
     title.Size = UDim2.new(1, -112, 0, 24)
 
-    local sub = Label(
-        card, description or category, 12, C.faint
-    )
-
+    local sub = Label(card, description or category, 12, C.faint)
     sub.Name = "StatusLabel"
     sub.Position = UDim2.fromOffset(15, 33)
     sub.Size = UDim2.new(1, -112, 0, 18)
@@ -1946,17 +1814,12 @@ local function Feature(
             Name = "KeybindButton",
             Position = UDim2.new(1, -102, 0.5, -16),
             Size = UDim2.fromOffset(69, 32),
-
             BackgroundColor3 = C.bg,
             BorderSizePixel = 0,
-
             Text = Keybinds[name] or "...",
-            TextColor3 =
-                Keybinds[name] and C.text or C.faint,
-
+            TextColor3 = Keybinds[name] and C.text or C.faint,
             Font = Enum.Font.GothamMedium,
             TextSize = 12,
-
             AutoButtonColor = false,
             ZIndex = 5
         }, card)
@@ -1972,12 +1835,7 @@ local function Feature(
         end)
     end
 
-    AddEntry(
-        card,
-        name .. " " .. (description or ""),
-        category
-    )
-
+    AddEntry(card, name .. " " .. (description or ""), category)
     return card
 end
 
@@ -1990,8 +1848,7 @@ local function Toggle(name, key, category, callback)
         if callback then callback(State[key]) end
 
         if status and status.Parent then
-            status.Text =
-                State[key] and "Enabled" or "Disabled"
+            status.Text = State[key] and "Enabled" or "Disabled"
         end
     end
 
@@ -2023,11 +1880,9 @@ local function Number(name, key, category, maximum, callback)
     local input = Create("TextBox", {
         Position = UDim2.new(1, -91, 0, 9),
         Size = UDim2.fromOffset(75, 27),
-
         BackgroundColor3 = C.bg,
         Text = tostring(State[key]),
         TextColor3 = C.text,
-
         Font = Enum.Font.GothamMedium,
         TextSize = 13,
         ClearTextOnFocus = false
@@ -2049,7 +1904,6 @@ local function Number(name, key, category, maximum, callback)
             math.clamp(State[key] / maximum, 0, 1),
             1
         ),
-
         BackgroundColor3 = C.purple,
         BorderSizePixel = 0
     }, track)
@@ -2064,19 +1918,11 @@ local function Number(name, key, category, maximum, callback)
             return
         end
 
-        value = math.clamp(
-            math.floor(value + 0.5),
-            0,
-            maximum
-        )
+        value = math.clamp(math.floor(value + 0.5), 0, maximum)
 
         State[key] = value
         input.Text = tostring(value)
-
-        fill.Size = UDim2.fromScale(
-            value / maximum,
-            1
-        )
+        fill.Size = UDim2.fromScale(value / maximum, 1)
 
         if callback then callback(value) end
         Save()
@@ -2089,9 +1935,7 @@ local function Number(name, key, category, maximum, callback)
     local sliding = false
 
     Bind(track.InputBegan, function(i)
-        if i.UserInputType ==
-            Enum.UserInputType.MouseButton1 then
-
+        if i.UserInputType == Enum.UserInputType.MouseButton1 then
             sliding = true
 
             Apply(
@@ -2104,8 +1948,7 @@ local function Number(name, key, category, maximum, callback)
 
     Bind(UIS.InputChanged, function(i)
         if sliding
-            and i.UserInputType ==
-            Enum.UserInputType.MouseMovement then
+            and i.UserInputType == Enum.UserInputType.MouseMovement then
 
             Apply(
                 (i.Position.X - track.AbsolutePosition.X)
@@ -2116,8 +1959,7 @@ local function Number(name, key, category, maximum, callback)
     end)
 
     Bind(UIS.InputEnded, function(i)
-        if i.UserInputType ==
-            Enum.UserInputType.MouseButton1 then
+        if i.UserInputType == Enum.UserInputType.MouseButton1 then
             sliding = false
         end
     end)
@@ -2187,7 +2029,6 @@ Sections.Commands = function()
     Action("Wave Emote", "Character", "Play wave", Wave)
 
     SectionTitle("Visuals")
-
     Toggle("Fullbright", "fullbright", "Visuals", Fullbright)
 end
 
@@ -2211,39 +2052,32 @@ local function DropdownArrow(parent, y)
     return holder
 end
 
-local function DropdownButton(
-    parent, value, position, size, callback
-)
+local function DropdownButton(parent, value, position, size, callback)
     local button = Create("TextButton", {
         Position = position,
         Size = size,
-
         BackgroundColor3 = C.selected,
         BorderSizePixel = 0,
-
         Text = value,
         TextColor3 = C.text,
-
         Font = Enum.Font.GothamBold,
         TextSize = 13,
         AutoButtonColor = false
     }, parent)
 
     Corner(button, 7)
-
     Bind(button.MouseButton1Click, callback)
+
     return button
 end
 
 --==================================================
--- PLAYERS
+-- PLAYERS PAGE
 --==================================================
 
 local ExpandedUserId = nil
-
 local PlayerCards = {}
 local PlayerCardConnections = {}
-
 local PlayerListGeneration = 0
 local PlayerCountLabel
 
@@ -2253,11 +2087,7 @@ local function BindPlayer(userId, signal, callback)
     PlayerCardConnections[userId] =
         PlayerCardConnections[userId] or {}
 
-    table.insert(
-        PlayerCardConnections[userId],
-        connection
-    )
-
+    table.insert(PlayerCardConnections[userId], connection)
     return connection
 end
 
@@ -2285,8 +2115,7 @@ local function GetThumbnail(player, image, generation)
             )
         end)
 
-        if ok
-            and Alive
+        if ok and Alive
             and generation == PlayerListGeneration
             and image.Parent
             and Players:GetPlayerByUserId(player.UserId) then
@@ -2310,9 +2139,7 @@ local function TeleportToPlayer(player)
     local c = Char()
 
     if c then
-        c:PivotTo(
-            target.CFrame * CFrame.new(3, 0, 0)
-        )
+        c:PivotTo(target.CFrame * CFrame.new(3, 0, 0))
     end
 
     if State.airWalk then StartAirWalk() end
@@ -2333,8 +2160,7 @@ local function LocalFlingDemo()
 end
 
 local function UpdatePlayerCount()
-    if not PlayerCountLabel
-        or not PlayerCountLabel.Parent then
+    if not PlayerCountLabel or not PlayerCountLabel.Parent then
         return
     end
 
@@ -2345,8 +2171,7 @@ local function UpdatePlayerCount()
     end
 
     PlayerCountLabel.Text =
-        tostring(count)
-        .. " players · tap a player to view actions"
+        tostring(count) .. " players · tap a player to view actions"
 end
 
 local function SortedPlayers()
@@ -2404,10 +2229,7 @@ local function MakePlayerCard(player, generation)
     displayName.Position = UDim2.fromOffset(63, 10)
     displayName.Size = UDim2.new(1, -115, 0, 24)
 
-    local username = Label(
-        card, "@" .. player.Name, 12, C.muted
-    )
-
+    local username = Label(card, "@" .. player.Name, 12, C.muted)
     username.Position = UDim2.fromOffset(63, 34)
     username.Size = UDim2.new(1, -115, 0, 19)
 
@@ -2434,8 +2256,7 @@ local function MakePlayerCard(player, generation)
     }, card)
 
     local tpButton = DropdownButton(
-        actions,
-        "TP",
+        actions, "TP",
         UDim2.new(0, 0, 0, 0),
         UDim2.new(0.48, 0, 1, 0),
         function()
@@ -2444,8 +2265,7 @@ local function MakePlayerCard(player, generation)
     )
 
     local flingButton = DropdownButton(
-        actions,
-        "Fling",
+        actions, "Fling",
         UDim2.new(0.52, 0, 0, 0),
         UDim2.new(0.48, 0, 1, 0),
         LocalFlingDemo
@@ -2455,8 +2275,6 @@ local function MakePlayerCard(player, generation)
         local height = open and 121 or 63
         local rotation = open and 90 or 0
         local color = open and C.selected or C.card
-
-        -- V28 inverse button colors.
         local buttonColor = open and C.card or C.selected
 
         tpButton.BackgroundColor3 = buttonColor
@@ -2472,9 +2290,7 @@ local function MakePlayerCard(player, generation)
                 BackgroundColor3 = color
             }, 0.2)
 
-            Tween(arrow, {
-                Rotation = rotation
-            }, 0.2)
+            Tween(arrow, {Rotation = rotation}, 0.2)
         end
     end
 
@@ -2484,36 +2300,25 @@ local function MakePlayerCard(player, generation)
         player = player
     }
 
-    SetExpanded(
-        ExpandedUserId == player.UserId,
-        true
-    )
+    SetExpanded(ExpandedUserId == player.UserId, true)
 
-    BindPlayer(
-        player.UserId,
-        clickArea.MouseButton1Click,
-        function()
-            if ExpandedUserId == player.UserId then
-                ExpandedUserId = nil
-            else
-                ExpandedUserId = player.UserId
-            end
+    BindPlayer(player.UserId, clickArea.MouseButton1Click, function()
+        if ExpandedUserId == player.UserId then
+            ExpandedUserId = nil
+        else
+            ExpandedUserId = player.UserId
+        end
 
-            for userId, data in pairs(PlayerCards) do
-                if data.frame.Parent then
-                    data.expand(
-                        userId == ExpandedUserId,
-                        false
-                    )
-                end
+        for userId, data in pairs(PlayerCards) do
+            if data.frame.Parent then
+                data.expand(userId == ExpandedUserId, false)
             end
         end
-    )
+    end)
 
     AddEntry(
         card,
-        player.DisplayName .. " "
-            .. player.Name .. " TP Fling",
+        player.DisplayName .. " " .. player.Name .. " TP Fling",
         "All"
     )
 
@@ -2527,9 +2332,7 @@ local function RemovePlayerCard(player)
     DisconnectPlayerCard(player.UserId)
     RemoveEntry(data.frame)
 
-    if data.frame.Parent then
-        data.frame:Destroy()
-    end
+    if data.frame.Parent then data.frame:Destroy() end
 
     PlayerCards[player.UserId] = nil
 
@@ -2563,7 +2366,6 @@ Sections.Players = function()
     local info = Label(List, "", 12, C.muted)
     info.Size = UDim2.new(1, 0, 0, 27)
     info.LayoutOrder = 0
-
     PlayerCountLabel = info
 
     for _, player in ipairs(SortedPlayers()) do
@@ -2620,16 +2422,8 @@ local function RequestServers(url)
     local requestFunction =
         (type(request) == "function" and request)
         or (type(http_request) == "function" and http_request)
-        or (
-            syn
-            and type(syn.request) == "function"
-            and syn.request
-        )
-        or (
-            http
-            and type(http.request) == "function"
-            and http.request
-        )
+        or (syn and type(syn.request) == "function" and syn.request)
+        or (http and type(http.request) == "function" and http.request)
 
     if not requestFunction then
         return nil, "HTTP requests are not supported."
@@ -2639,15 +2433,11 @@ local function RequestServers(url)
         return requestFunction({
             Url = url,
             Method = "GET",
-            Headers = {
-                ["Accept"] = "application/json"
-            }
+            Headers = {["Accept"] = "application/json"}
         })
     end)
 
-    if not ok then
-        return nil, tostring(response)
-    end
+    if not ok then return nil, tostring(response) end
 
     if type(response) ~= "table" then
         return nil, "Invalid HTTP response."
@@ -2669,11 +2459,9 @@ local function RequestServers(url)
         return HttpService:JSONDecode(body)
     end)
 
-    if not decodedOk or type(decoded) ~= "table" then
-        return nil, "Unable to decode server data."
-    end
+    if not decodedOk or type(decoded) ~= "table"
+        or type(decoded.data) ~= "table" then
 
-    if type(decoded.data) ~= "table" then
         return nil, "Invalid server listing."
     end
 
@@ -2687,28 +2475,21 @@ local function ServerURL(cursor)
         .. "/servers/Public?sortOrder=Desc&limit=100"
 
     if cursor and cursor ~= "" then
-        url ..= "&cursor="
-            .. HttpService:UrlEncode(cursor)
+        url ..= "&cursor=" .. HttpService:UrlEncode(cursor)
     end
 
     return url
 end
 
 local function ServerShortId(id)
-    if type(id) ~= "string" then
-        return "Unknown"
-    end
-
+    if type(id) ~= "string" then return "Unknown" end
     if #id <= 16 then return id end
 
-    return id:sub(1, 8)
-        .. "..."
-        .. id:sub(-5)
+    return id:sub(1, 8) .. "..." .. id:sub(-5)
 end
 
 local function ServerPopulation(server)
-    if server.playing == nil
-        or server.maxPlayers == nil then
+    if server.playing == nil or server.maxPlayers == nil then
         return "Previously visited"
     end
 
@@ -2736,7 +2517,7 @@ local function JoinServer(placeId, jobId)
 end
 
 --==================================================
--- SERVER CARD
+-- SERVER CARDS
 --==================================================
 
 local function ServerCard(server, index, kind)
@@ -2756,17 +2537,7 @@ local function ServerCard(server, index, kind)
         return ServerBrowser.cards[key]
     end
 
-    local order
-
-    if current then
-        order = 1
-    elseif previous then
-        order = 10 + index
-    else
-        order = 10 + index
-    end
-
-    local card = MakeCard(67, order)
+    local card = MakeCard(67, current and 1 or (10 + index))
     card.Name = "Server_" .. tostring(index)
     card.ClipsDescendants = true
 
@@ -2774,11 +2545,7 @@ local function ServerCard(server, index, kind)
         card.BackgroundColor3 = C.selected
     end
 
-    Dot(
-        card,
-        23, 22, 4,
-        current and C.purple or C.green
-    )
+    Dot(card, 23, 22, 4, current and C.purple or C.green)
 
     local titleText
 
@@ -2802,19 +2569,11 @@ local function ServerCard(server, index, kind)
     title.Position = UDim2.fromOffset(37, 8)
     title.Size = UDim2.new(1, -85, 0, 25)
 
-    local subtitle = current
-        and ServerPopulation(server)
-        or previous
-            and "Previously visited"
-            or ServerPopulation(server)
+    local subtitle = previous
+        and "Previously visited"
+        or ServerPopulation(server)
 
-    local population = Label(
-        card,
-        subtitle,
-        12,
-        C.muted
-    )
-
+    local population = Label(card, subtitle, 12, C.muted)
     population.Position = UDim2.fromOffset(37, 34)
     population.Size = UDim2.new(1, -85, 0, 19)
 
@@ -2856,40 +2615,25 @@ local function ServerCard(server, index, kind)
     local join = Create("TextButton", {
         Position = UDim2.fromOffset(0, 33),
         Size = UDim2.new(1, 0, 0, 36),
-
-        BackgroundColor3 = current
-            and C.card or C.selected,
-
+        BackgroundColor3 = current and C.card or C.selected,
         BorderSizePixel = 0,
-
         Text = defaultText,
         TextColor3 = C.text,
-
         Font = Enum.Font.GothamBold,
         TextSize = 13,
         AutoButtonColor = false
     }, details)
 
     Corner(join, 7)
-
-    -- V28: Explicit border for extra button visibility.
-    local joinStroke = Stroke(
-        join,
-        C.border,
-        1
-    )
+    Stroke(join, C.border, 1)
 
     Bind(join.MouseButton1Click, function()
-        join.Text = current
-            and "Rejoining..."
-            or "Joining..."
+        join.Text = current and "Rejoining..." or "Joining..."
 
         local ok, err = JoinServer(placeId, id)
 
         if not ok then
-            join.Text = current
-                and "Rejoin Failed"
-                or "Join Failed"
+            join.Text = current and "Rejoin Failed" or "Join Failed"
 
             warn("[KHASTIFY] Teleport failed:", err)
 
@@ -2904,16 +2648,11 @@ local function ServerCard(server, index, kind)
     local function SetExpanded(open, instant)
         local height = open and 166 or 67
         local rotation = open and 90 or 0
-
         local highlighted = current or open
 
-        local cardColor =
-            highlighted and C.selected or C.card
+        local cardColor = highlighted and C.selected or C.card
+        local buttonColor = highlighted and C.card or C.selected
 
-        local buttonColor =
-            highlighted and C.card or C.selected
-
-        -- Inverse button colors.
         join.BackgroundColor3 = buttonColor
 
         if instant then
@@ -2926,9 +2665,7 @@ local function ServerCard(server, index, kind)
                 BackgroundColor3 = cardColor
             }, 0.2)
 
-            Tween(arrow, {
-                Rotation = rotation
-            }, 0.2)
+            Tween(arrow, {Rotation = rotation}, 0.2)
         end
     end
 
@@ -2941,10 +2678,7 @@ local function ServerCard(server, index, kind)
         population = population
     }
 
-    SetExpanded(
-        ServerBrowser.expandedId == key,
-        true
-    )
+    SetExpanded(ServerBrowser.expandedId == key, true)
 
     Bind(clickArea.MouseButton1Click, function()
         if ServerBrowser.expandedId == key then
@@ -2955,29 +2689,23 @@ local function ServerCard(server, index, kind)
 
         for serverKey, data in pairs(ServerBrowser.cards) do
             if data.frame.Parent then
-                data.expand(
-                    serverKey == ServerBrowser.expandedId,
-                    false
-                )
+                data.expand(serverKey == ServerBrowser.expandedId, false)
             end
         end
     end)
 
     AddEntry(
         card,
-
         titleText .. " "
             .. tostring(id) .. " "
             .. tostring(placeId) .. " "
             .. (server.gameName or "") .. " "
             .. subtitle,
-
         "All",
         current
     )
 
     Filter()
-
     return ServerBrowser.cards[key]
 end
 
@@ -2986,9 +2714,7 @@ end
 --==================================================
 
 local function UpdateServerStatus(value)
-    if ServerBrowser.status
-        and ServerBrowser.status.Parent then
-
+    if ServerBrowser.status and ServerBrowser.status.Parent then
         ServerBrowser.status.Text = value
     end
 end
@@ -2996,9 +2722,7 @@ end
 local function UpdateLoadMoreButton()
     local button = ServerBrowser.loadMoreButton
 
-    if not button or not button.Parent then
-        return
-    end
+    if not button or not button.Parent then return end
 
     button.Visible =
         ServerBrowser.cursor ~= nil
@@ -3055,8 +2779,7 @@ LoadServerPage = function(reset)
 
         if not data then
             UpdateServerStatus(
-                "Unable to load servers: "
-                .. tostring(err)
+                "Unable to load servers: " .. tostring(err)
             )
 
             UpdateLoadMoreButton()
@@ -3071,11 +2794,9 @@ LoadServerPage = function(reset)
 
                 if server.id == game.JobId then
                     local currentKey =
-                        tostring(game.PlaceId)
-                        .. ":" .. game.JobId
+                        tostring(game.PlaceId) .. ":" .. game.JobId
 
-                    local currentCard =
-                        ServerBrowser.cards[currentKey]
+                    local currentCard = ServerBrowser.cards[currentKey]
 
                     if currentCard then
                         currentCard.population.Text =
@@ -3083,14 +2804,10 @@ LoadServerPage = function(reset)
                     end
                 else
                     local key =
-                        tostring(game.PlaceId)
-                        .. ":" .. server.id
+                        tostring(game.PlaceId) .. ":" .. server.id
 
                     if not ServerBrowser.cards[key] then
-                        table.insert(
-                            ServerBrowser.servers,
-                            server
-                        )
+                        table.insert(ServerBrowser.servers, server)
 
                         ServerCard(
                             server,
@@ -3131,7 +2848,7 @@ local function ClearServerCards()
 end
 
 --==================================================
--- V28 SERVER SUBSECTIONS
+-- ALL / PREVIOUS SERVER SECTIONS
 --==================================================
 
 local BuildServerSection
@@ -3164,8 +2881,6 @@ BuildServerSection = function(subsection)
         and "search previous games..."
         or "search servers..."
 
-    -- Current server ALWAYS first.
-
     local current = {
         id = game.JobId,
         placeId = game.PlaceId,
@@ -3179,7 +2894,6 @@ BuildServerSection = function(subsection)
     end
 
     if subsection == "Previous" then
-
         SectionTitle("Previous Servers", 2)
 
         if #ServerHistory.previous == 0 then
@@ -3207,7 +2921,6 @@ BuildServerSection = function(subsection)
         end
 
     else
-
         local info = Label(
             List,
             "Loading public servers...",
@@ -3217,7 +2930,6 @@ BuildServerSection = function(subsection)
 
         info.Size = UDim2.new(1, 0, 0, 28)
         info.LayoutOrder = 2
-
         ServerBrowser.status = info
 
         local refreshCard = MakeCard(51, 1000000)
@@ -3225,10 +2937,8 @@ BuildServerSection = function(subsection)
         local refresh = Create("TextButton", {
             Size = UDim2.fromScale(1, 1),
             BackgroundTransparency = 1,
-
             Text = "Refresh Servers",
             TextColor3 = C.text,
-
             Font = Enum.Font.GothamBold,
             TextSize = 13,
             AutoButtonColor = false
@@ -3246,10 +2956,8 @@ BuildServerSection = function(subsection)
         local more = Create("TextButton", {
             Size = UDim2.fromScale(1, 1),
             BackgroundTransparency = 1,
-
             Text = "Load More Servers",
             TextColor3 = C.purple,
-
             Font = Enum.Font.GothamBold,
             TextSize = 13,
             AutoButtonColor = false
@@ -3394,11 +3102,7 @@ ShowSection = function(name)
         local ok, err = pcall(Sections[name])
 
         if not ok then
-            warn(
-                "[KHASTIFY] Page error:",
-                name,
-                err
-            )
+            warn("[KHASTIFY] Page error:", name, err)
 
             local errorLabel = Label(
                 List,
@@ -3422,10 +3126,7 @@ for name, data in pairs(NavButtons) do
     end)
 end
 
-Bind(
-    SearchBox:GetPropertyChangedSignal("Text"),
-    Filter
-)
+Bind(SearchBox:GetPropertyChangedSignal("Text"), Filter)
 
 Bind(Close.MouseButton1Click, function()
     Window.Visible = false
@@ -3444,9 +3145,7 @@ local DragStart
 local StartPosition
 
 Bind(Topbar.InputBegan, function(input)
-    if input.UserInputType ==
-        Enum.UserInputType.MouseButton1 then
-
+    if input.UserInputType == Enum.UserInputType.MouseButton1 then
         Dragging = true
         DragStart = input.Position
         StartPosition = Window.Position
@@ -3455,15 +3154,13 @@ end)
 
 Bind(UIS.InputChanged, function(input)
     if Dragging
-        and input.UserInputType ==
-        Enum.UserInputType.MouseMovement then
+        and input.UserInputType == Enum.UserInputType.MouseMovement then
 
         local delta = input.Position - DragStart
 
         Window.Position = UDim2.new(
             StartPosition.X.Scale,
             StartPosition.X.Offset + delta.X,
-
             StartPosition.Y.Scale,
             StartPosition.Y.Offset + delta.Y
         )
@@ -3471,8 +3168,7 @@ Bind(UIS.InputChanged, function(input)
 end)
 
 Bind(UIS.InputEnded, function(input)
-    if input.UserInputType ==
-        Enum.UserInputType.MouseButton1
+    if input.UserInputType == Enum.UserInputType.MouseButton1
         and Dragging then
 
         Dragging = false
@@ -3486,15 +3182,13 @@ Bind(UIS.InputEnded, function(input)
                 State.uiX = math.clamp(
                     (Window.AbsolutePosition.X + WIDTH / 2)
                     / size.X,
-                    0,
-                    1
+                    0, 1
                 )
 
                 State.uiY = math.clamp(
                     (Window.AbsolutePosition.Y + HEIGHT / 2)
                     / size.Y,
-                    0,
-                    1
+                    0, 1
                 )
 
                 Save()
@@ -3509,9 +3203,7 @@ end)
 
 Bind(UIS.InputBegan, function(input, processed)
     if WaitingForBind then
-        if input.UserInputType ==
-            Enum.UserInputType.Keyboard then
-
+        if input.UserInputType == Enum.UserInputType.Keyboard then
             local name = WaitingForBind
             WaitingForBind = nil
 
@@ -3535,9 +3227,7 @@ Bind(UIS.InputBegan, function(input, processed)
     end
 
     if ChangingMenuKey then
-        if input.UserInputType ==
-            Enum.UserInputType.Keyboard then
-
+        if input.UserInputType == Enum.UserInputType.Keyboard then
             ChangingMenuKey = false
 
             if input.KeyCode ~= Enum.KeyCode.Escape
@@ -3560,13 +3250,9 @@ Bind(UIS.InputBegan, function(input, processed)
         return
     end
 
-    if processed or UIS:GetFocusedTextBox() then
-        return
-    end
+    if processed or UIS:GetFocusedTextBox() then return end
 
-    if input.UserInputType ==
-        Enum.UserInputType.Keyboard then
-
+    if input.UserInputType == Enum.UserInputType.Keyboard then
         local key = input.KeyCode.Name
 
         if key == State.menuKey then
@@ -3580,9 +3266,7 @@ Bind(UIS.InputBegan, function(input, processed)
             local h = Hum()
 
             if h then
-                h:ChangeState(
-                    Enum.HumanoidStateType.Jumping
-                )
+                h:ChangeState(Enum.HumanoidStateType.Jumping)
             end
         end
 
@@ -3595,8 +3279,7 @@ Bind(UIS.InputBegan, function(input, processed)
     end
 
     if State.clickTP
-        and input.UserInputType ==
-        Enum.UserInputType.MouseButton1 then
+        and input.UserInputType == Enum.UserInputType.MouseButton1 then
 
         local position = UIS:GetMouseLocation()
 
@@ -3623,26 +3306,14 @@ Bind(UIS.InputBegan, function(input, processed)
                 )
 
                 local params = RaycastParams.new()
-                params.FilterType =
-                    Enum.RaycastFilterType.Exclude
+                params.FilterType = Enum.RaycastFilterType.Exclude
 
                 local excluded = {}
 
-                if Char() then
-                    table.insert(excluded, Char())
-                end
-
-                if VisualAvatar then
-                    table.insert(excluded, VisualAvatar)
-                end
-
-                if InvisibleFloor then
-                    table.insert(excluded, InvisibleFloor)
-                end
-
-                if AirPlatform then
-                    table.insert(excluded, AirPlatform)
-                end
+                if Char() then table.insert(excluded, Char()) end
+                if VisualAvatar then table.insert(excluded, VisualAvatar) end
+                if InvisibleFloor then table.insert(excluded, InvisibleFloor) end
+                if AirPlatform then table.insert(excluded, AirPlatform) end
 
                 params.FilterDescendantsInstances = excluded
 
@@ -3663,15 +3334,12 @@ Bind(UIS.InputBegan, function(input, processed)
                     if c then
                         c:PivotTo(
                             CFrame.new(
-                                hit.Position
-                                + Vector3.new(0, 3.5, 0)
+                                hit.Position + Vector3.new(0, 3.5, 0)
                             )
                         )
                     end
 
-                    if State.airWalk then
-                        StartAirWalk()
-                    end
+                    if State.airWalk then StartAirWalk() end
                 end
             end
         end
@@ -3705,8 +3373,7 @@ Bind(Run.Heartbeat, function()
 
     if Active == "Servers" then
         local currentKey =
-            tostring(game.PlaceId)
-            .. ":" .. game.JobId
+            tostring(game.PlaceId) .. ":" .. game.JobId
 
         local current = ServerBrowser.cards[currentKey]
 
@@ -3835,7 +3502,6 @@ ShowSection("Commands")
 
 _G.KHASTIFY_HUB_CLEANUP = function()
     Alive = false
-
     PlayerListGeneration += 1
 
     ClearPlayerCards()
@@ -3869,17 +3535,15 @@ _G.KHASTIFY_HUB_CLEANUP = function()
     end
 
     GUI:Destroy()
-
     _G.KHASTIFY_HUB_CLEANUP = nil
 end
 
 print("====================================")
-print("KHASTIFY'S UNIVERSAL HUB V28")
-print("ALL / PREVIOUS SERVER SECTIONS")
-print("LAST 5 SERVERS SAVED ACROSS GAMES")
-print("CURRENT SERVER PINNED FIRST")
-print("REJOIN CURRENT / JOIN PREVIOUS")
-print("INVERSE DROPDOWN BUTTON COLORS")
-print("REDESIGNED SIDEBAR ICONS")
+print("KHASTIFY'S UNIVERSAL HUB V29")
+print("ACTIONS STAR JOINTS REINFORCED")
+print("PLAYERS ICON LAYERING UPDATED")
+print("VOICE CHAT MICROPHONE REDESIGNED")
+print("ALL / PREVIOUS SERVER HISTORY")
+print("COMMANDS / SERVERS ICONS PRESERVED")
 print("Press " .. State.menuKey .. " to open.")
 print("====================================")
