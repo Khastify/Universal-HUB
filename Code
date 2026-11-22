@@ -1,6 +1,5 @@
--- KHASTIFY'S UNIVERSAL HUB V8
--- 11-Stud Invisibility / Pose Mirroring / Air Walk
--- Experimental client-side Roblox utility hub
+-- KHASTIFY'S UNIVERSAL HUB V9
+-- Underground Invisibility / Terrain Following / Camera Fix
 
 local Players = game:GetService("Players")
 local UIS = game:GetService("UserInputService")
@@ -10,21 +9,22 @@ local Http = game:GetService("HttpService")
 local TeleportService = game:GetService("TeleportService")
 
 local LP = Players.LocalPlayer
-local Camera = workspace.CurrentCamera
 
 if _G.KHASTIFY_HUB_CLEANUP then
     pcall(_G.KHASTIFY_HUB_CLEANUP)
 end
 
-local parent = (gethui and gethui()) or LP:WaitForChild("PlayerGui")
-local previous = parent:FindFirstChild("KhastifyUniversalHub")
-if previous then previous:Destroy() end
+local parent = (gethui and gethui())
+    or LP:WaitForChild("PlayerGui")
+
+local old = parent:FindFirstChild("KhastifyUniversalHub")
+if old then old:Destroy() end
 
 local connections = {}
-local function bind(signal, callback)
-    local connection = signal:Connect(callback)
-    table.insert(connections, connection)
-    return connection
+local function bind(signal, fn)
+    local c = signal:Connect(fn)
+    table.insert(connections, c)
+    return c
 end
 
 local function character()
@@ -65,10 +65,12 @@ local saveFile = "KHASTIFY_Universal_Hub_Settings.json"
 
 if type(readfile) == "function" then
     pcall(function()
-        local saved = Http:JSONDecode(readfile(saveFile))
-        for key, value in pairs(saved) do
-            if state[key] ~= nil and type(value) == type(state[key]) then
-                state[key] = value
+        local data = Http:JSONDecode(readfile(saveFile))
+
+        for k, v in pairs(data) do
+            if state[k] ~= nil
+                and type(v) == type(state[k]) then
+                state[k] = v
             end
         end
     end)
@@ -76,6 +78,7 @@ end
 
 local function save()
     if type(writefile) ~= "function" then return end
+
     pcall(function()
         writefile(saveFile, Http:JSONEncode({
             flySpeed = state.flySpeed,
@@ -89,34 +92,40 @@ local function save()
     end)
 end
 
--- ========================================
--- PHYSICS / MOVEMENT
--- ========================================
+-- ==========================================
+-- COLLISION MANAGEMENT
+-- ==========================================
 
 local collisions = {}
-
-local function restoreCollision()
-    for part, original in pairs(collisions) do
-        if part and part.Parent then
-            part.CanCollide = original
-        end
-    end
-    table.clear(collisions)
-end
 
 local function applyNoclip()
     local c = character()
     if not c then return end
 
-    for _, part in ipairs(c:GetDescendants()) do
-        if part:IsA("BasePart") then
-            if collisions[part] == nil then
-                collisions[part] = part.CanCollide
+    for _, p in ipairs(c:GetDescendants()) do
+        if p:IsA("BasePart") then
+            if collisions[p] == nil then
+                collisions[p] = p.CanCollide
             end
-            part.CanCollide = false
+
+            p.CanCollide = false
         end
     end
 end
+
+local function restoreCollision()
+    for p, value in pairs(collisions) do
+        if p and p.Parent then
+            p.CanCollide = value
+        end
+    end
+
+    table.clear(collisions)
+end
+
+-- ==========================================
+-- FLIGHT
+-- ==========================================
 
 local flyVelocity
 local flyGyro
@@ -124,6 +133,7 @@ local flyGyro
 local function stopFly()
     if flyVelocity then flyVelocity:Destroy() end
     if flyGyro then flyGyro:Destroy() end
+
     flyVelocity = nil
     flyGyro = nil
 
@@ -141,31 +151,33 @@ local function startFly()
     h.PlatformStand = true
 
     flyVelocity = Instance.new("BodyVelocity")
-    flyVelocity.Name = "KHASTIFY_Fly"
     flyVelocity.MaxForce = Vector3.new(1e9, 1e9, 1e9)
     flyVelocity.Velocity = Vector3.zero
     flyVelocity.Parent = r
 
     flyGyro = Instance.new("BodyGyro")
-    flyGyro.Name = "KHASTIFY_FlyDirection"
     flyGyro.MaxTorque = Vector3.new(1e9, 1e9, 1e9)
     flyGyro.P = 9000
     flyGyro.Parent = r
 end
 
 local function makePlatform(name, size)
-    local part = Instance.new("Part")
-    part.Name = name
-    part.Size = size
-    part.Anchored = true
-    part.Transparency = 1
-    part.CanCollide = true
-    part.CanTouch = false
-    part.CanQuery = false
-    part.CastShadow = false
-    part.Parent = workspace
-    return part
+    local p = Instance.new("Part")
+    p.Name = name
+    p.Size = size
+    p.Anchored = true
+    p.Transparency = 1
+    p.CanCollide = true
+    p.CanTouch = false
+    p.CanQuery = false
+    p.CastShadow = false
+    p.Parent = workspace
+    return p
 end
+
+-- ==========================================
+-- AIR WALK
+-- ==========================================
 
 local airPlatform
 local airHeight
@@ -183,9 +195,16 @@ local function startAirWalk()
     if not r then return end
 
     airHeight = r.Position.Y - 3.2
+
     airPlatform = makePlatform(
         "KHASTIFY_AirWalk",
         Vector3.new(10, 0.5, 10)
+    )
+
+    airPlatform.Position = Vector3.new(
+        r.Position.X,
+        airHeight - 0.25,
+        r.Position.Z
     )
 end
 
@@ -194,62 +213,74 @@ local function dash()
     local camera = workspace.CurrentCamera
     if not r or not camera then return end
 
-    local direction = camera.CFrame.LookVector
-    direction = Vector3.new(direction.X, 0, direction.Z)
+    local d = camera.CFrame.LookVector
+    d = Vector3.new(d.X, 0, d.Z)
 
-    if direction.Magnitude < 0.01 then return end
+    if d.Magnitude < 0.01 then return end
 
-    local velocity = r.AssemblyLinearVelocity
+    local v = r.AssemblyLinearVelocity
+
     r.AssemblyLinearVelocity =
-        direction.Unit * state.dashPower +
-        Vector3.new(0, velocity.Y, 0)
+        d.Unit * state.dashPower
+        + Vector3.new(0, v.Y, 0)
 end
 
--- ========================================
--- INVISIBILITY V8
--- ========================================
+-- ==========================================
+-- INVISIBILITY V9
+-- ==========================================
 
-local INVISIBLE_OFFSET = 11
-local VISUAL_TRANSPARENCY = 0.30
+local OFFSET = 11
+local TRANSPARENCY = 0.30
 
 local invisibleActive = false
-local invisibleFloor
-local invisibleFloorY
 local visualAvatar
-local visualRoot
+local invisibleFloor
 
+local partPairs = {}
 local originalTransparency = {}
-local mirroredParts = {}
+
 local originalCameraSubject
 local originalCameraType
+local originalCameraOffset
+
+local floorY
+local lastGroundY
+local lastGroundPosition
+
+-- These values can be tuned for different rigs.
+local FLOOR_DISTANCE = 3.2
+local MAX_STEP_UP = 3.5
+local MAX_STEP_DOWN = 5
+local CEILING_CLEARANCE = 4.5
+local GROUND_SCAN_HEIGHT = 14
+local GROUND_SCAN_LENGTH = 32
 
 local function restoreTransparency()
-    for part, value in pairs(originalTransparency) do
-        if part and part.Parent then
-            part.LocalTransparencyModifier = value
+    for p, value in pairs(originalTransparency) do
+        if p and p.Parent then
+            p.LocalTransparencyModifier = value
         end
     end
+
     table.clear(originalTransparency)
 end
 
-local function destroyVisual()
+local function destroyInvisibleObjects()
     if visualAvatar then
         visualAvatar:Destroy()
         visualAvatar = nil
     end
 
-    visualRoot = nil
-    table.clear(mirroredParts)
-
     if invisibleFloor then
         invisibleFloor:Destroy()
         invisibleFloor = nil
     end
+
+    table.clear(partPairs)
 end
 
--- Build stable paths to distinguish parts with identical names.
 local function partPath(obj, ancestor)
-    local result = {}
+    local pieces = {}
     local current = obj
 
     while current and current ~= ancestor do
@@ -258,57 +289,52 @@ local function partPath(obj, ancestor)
         for _, sibling in ipairs(current.Parent:GetChildren()) do
             if sibling.Name == current.Name
                 and sibling.ClassName == current.ClassName then
-
                 index += 1
                 if sibling == current then break end
             end
         end
 
         table.insert(
-            result,
+            pieces,
             1,
-            current.ClassName .. "|" .. current.Name .. "|" .. index
+            current.ClassName .. ":"
+                .. current.Name .. ":" .. index
         )
 
         current = current.Parent
     end
 
-    return table.concat(result, "/")
+    return table.concat(pieces, "/")
 end
 
 local function createVisualAvatar()
     local c = character()
     if not c then return nil end
 
-    local wasArchivable = c.Archivable
+    local previousArchivable = c.Archivable
     c.Archivable = true
 
-    local success, clone = pcall(function()
+    local ok, clone = pcall(function()
         return c:Clone()
     end)
 
-    c.Archivable = wasArchivable
+    c.Archivable = previousArchivable
 
-    if not success or not clone then
-        return nil
-    end
+    if not ok or not clone then return nil end
 
     clone.Name = "KHASTIFY_TransparentAvatar"
 
-    -- Remove anything that could independently move the copy.
+    -- Remove all constraints so every visual part
+    -- can be positioned independently.
     for _, obj in ipairs(clone:GetDescendants()) do
-        if obj:IsA("Script") or obj:IsA("LocalScript") then
+        if obj:IsA("Script")
+            or obj:IsA("LocalScript") then
+
             obj:Destroy()
 
-        elseif obj:IsA("Motor6D")
-            or obj:IsA("Weld")
+        elseif obj:IsA("JointInstance")
             or obj:IsA("WeldConstraint")
-            or obj:IsA("ManualWeld")
-            or obj:IsA("Snap")
-            or obj:IsA("BallSocketConstraint")
-            or obj:IsA("HingeConstraint")
-            or obj:IsA("AlignPosition")
-            or obj:IsA("AlignOrientation") then
+            or obj:IsA("Constraint") then
 
             obj:Destroy()
 
@@ -324,16 +350,18 @@ local function createVisualAvatar()
             else
                 obj.Transparency = math.max(
                     obj.Transparency,
-                    VISUAL_TRANSPARENCY
+                    TRANSPARENCY
                 )
             end
 
             obj.LocalTransparencyModifier = 0
 
-        elseif obj:IsA("Decal") or obj:IsA("Texture") then
+        elseif obj:IsA("Decal")
+            or obj:IsA("Texture") then
+
             obj.Transparency = math.max(
                 obj.Transparency,
-                VISUAL_TRANSPARENCY
+                TRANSPARENCY
             )
 
         elseif obj:IsA("ParticleEmitter")
@@ -344,36 +372,34 @@ local function createVisualAvatar()
         end
     end
 
-    local cloneParts = {}
+    local lookup = {}
 
-    for _, part in ipairs(clone:GetDescendants()) do
-        if part:IsA("BasePart") then
-            cloneParts[partPath(part, clone)] = part
+    for _, p in ipairs(clone:GetDescendants()) do
+        if p:IsA("BasePart") then
+            lookup[partPath(p, clone)] = p
         end
     end
 
-    table.clear(mirroredParts)
+    table.clear(partPairs)
 
-    for _, part in ipairs(c:GetDescendants()) do
-        if part:IsA("BasePart") then
-            local matching = cloneParts[partPath(part, c)]
+    for _, p in ipairs(c:GetDescendants()) do
+        if p:IsA("BasePart") then
+            local match = lookup[partPath(p, c)]
 
-            if matching then
-                table.insert(mirroredParts, {
-                    source = part,
-                    visual = matching
+            if match then
+                table.insert(partPairs, {
+                    source = p,
+                    visual = match
                 })
             end
         end
     end
 
-    visualRoot = clone:FindFirstChild("HumanoidRootPart")
+    local ghostHum = clone:FindFirstChildOfClass("Humanoid")
 
-    local ghostHumanoid = clone:FindFirstChildOfClass("Humanoid")
-    if ghostHumanoid then
-        ghostHumanoid.DisplayDistanceType =
+    if ghostHum then
+        ghostHum.DisplayDistanceType =
             Enum.HumanoidDisplayDistanceType.None
-        ghostHumanoid.BreakJointsOnDeath = false
     end
 
     clone.Parent = workspace
@@ -381,24 +407,143 @@ local function createVisualAvatar()
     return clone
 end
 
+-- ==========================================
+-- TERRAIN DETECTION
+-- ==========================================
+
+local function groundAt(x, z, referenceY)
+    local params = RaycastParams.new()
+    params.FilterType = Enum.RaycastFilterType.Exclude
+
+    local exclusions = {}
+
+    if character() then
+        table.insert(exclusions, character())
+    end
+
+    if visualAvatar then
+        table.insert(exclusions, visualAvatar)
+    end
+
+    if invisibleFloor then
+        table.insert(exclusions, invisibleFloor)
+    end
+
+    if airPlatform then
+        table.insert(exclusions, airPlatform)
+    end
+
+    params.FilterDescendantsInstances = exclusions
+    params.IgnoreWater = false
+
+    local origin = Vector3.new(
+        x,
+        referenceY + GROUND_SCAN_HEIGHT,
+        z
+    )
+
+    local result = workspace:Raycast(
+        origin,
+        Vector3.new(0, -GROUND_SCAN_LENGTH, 0),
+        params
+    )
+
+    if result and result.Normal.Y > 0.35 then
+        return result.Position.Y
+    end
+
+    return nil
+end
+
+local function setBodyY(newY)
+    local c = character()
+    local r = root()
+
+    if not c or not r then return end
+
+    local delta = newY - r.Position.Y
+
+    if math.abs(delta) > 0.001 then
+        c:PivotTo(c:GetPivot() + Vector3.new(
+            0, delta, 0
+        ))
+    end
+end
+
+-- ==========================================
+-- CAMERA FIX
+-- ==========================================
+
+local function applyInvisibleCamera()
+    local camera = workspace.CurrentCamera
+    local h = humanoid()
+
+    if not camera or not h then return end
+
+    -- Keep Roblox's regular humanoid camera.
+    -- Raise its subject offset by the same amount
+    -- that the real body was lowered.
+    camera.CameraType = Enum.CameraType.Custom
+    camera.CameraSubject = h
+
+    h.CameraOffset =
+        (originalCameraOffset or Vector3.zero)
+        + Vector3.new(0, OFFSET, 0)
+end
+
+local function restoreCamera()
+    local camera = workspace.CurrentCamera
+    local h = humanoid()
+
+    if h and originalCameraOffset then
+        h.CameraOffset = originalCameraOffset
+    end
+
+    if camera then
+        camera.CameraType =
+            originalCameraType or Enum.CameraType.Custom
+
+        if originalCameraSubject
+            and originalCameraSubject.Parent then
+
+            camera.CameraSubject = originalCameraSubject
+
+        elseif h then
+            camera.CameraSubject = h
+        end
+    end
+
+    originalCameraSubject = nil
+    originalCameraType = nil
+    originalCameraOffset = nil
+end
+
+-- ==========================================
+-- EXACT VISUAL MIRROR
+-- ==========================================
+
 local function mirrorAvatar()
     if not invisibleActive then return end
     if not visualAvatar or not visualAvatar.Parent then return end
 
-    local offset = Vector3.new(0, INVISIBLE_OFFSET, 0)
+    local offset = Vector3.new(0, OFFSET, 0)
 
-    -- Copy every part's final world-space pose.
-    -- This includes body animation and accessory movement.
-    for _, pair in ipairs(mirroredParts) do
+    for _, pair in ipairs(partPairs) do
         local source = pair.source
         local visual = pair.visual
 
-        if source and source.Parent and visual and visual.Parent then
+        if source and source.Parent
+            and visual and visual.Parent then
+
             visual.CFrame = source.CFrame + offset
             visual.Size = source.Size
         end
     end
 end
+
+-- ==========================================
+-- INVISIBILITY CONTROL
+-- ==========================================
 
 local function setInvisible(enabled)
     local c = character()
@@ -407,41 +552,31 @@ local function setInvisible(enabled)
     local camera = workspace.CurrentCamera
 
     if not enabled then
-        if invisibleActive and c and r then
-            -- Return the entire physical character aboveground.
-            c:PivotTo(c:GetPivot() + Vector3.new(
-                0,
-                INVISIBLE_OFFSET,
-                0
-            ))
+        if invisibleActive and c then
+            c:PivotTo(
+                c:GetPivot()
+                + Vector3.new(0, OFFSET, 0)
+            )
 
-            r.AssemblyLinearVelocity = Vector3.zero
-            r.AssemblyAngularVelocity = Vector3.zero
+            if r then
+                r.AssemblyLinearVelocity = Vector3.zero
+                r.AssemblyAngularVelocity = Vector3.zero
+            end
         end
 
         invisibleActive = false
 
-        if camera then
-            camera.CameraType =
-                originalCameraType or Enum.CameraType.Custom
-
-            if h then
-                camera.CameraSubject = h
-            elseif originalCameraSubject then
-                camera.CameraSubject = originalCameraSubject
-            end
-        end
-
-        destroyVisual()
+        restoreCamera()
+        destroyInvisibleObjects()
         restoreTransparency()
 
         if not state.noclip then
             restoreCollision()
         end
 
-        invisibleFloorY = nil
-        originalCameraSubject = nil
-        originalCameraType = nil
+        floorY = nil
+        lastGroundY = nil
+        lastGroundPosition = nil
 
         return
     end
@@ -457,7 +592,7 @@ local function setInvisible(enabled)
 
     if not clone then
         state.invisible = false
-        warn("[KHASTIFY] Failed to clone avatar.")
+        warn("[KHASTIFY] Failed to create visual avatar.")
         return
     end
 
@@ -468,104 +603,181 @@ local function setInvisible(enabled)
         originalCameraType = camera.CameraType
     end
 
-    -- Save the physical body's appearance.
-    for _, part in ipairs(c:GetDescendants()) do
-        if part:IsA("BasePart") then
-            originalTransparency[part] =
-                part.LocalTransparencyModifier
+    originalCameraOffset = h.CameraOffset
+
+    -- Determine the visible ground level before
+    -- moving the physical character.
+    local startingPosition = r.Position
+
+    lastGroundY = groundAt(
+        startingPosition.X,
+        startingPosition.Z,
+        startingPosition.Y
+    )
+
+    if not lastGroundY then
+        lastGroundY = startingPosition.Y - FLOOR_DISTANCE
+    end
+
+    lastGroundPosition = startingPosition
+
+    for _, p in ipairs(c:GetDescendants()) do
+        if p:IsA("BasePart") then
+            originalTransparency[p] =
+                p.LocalTransparencyModifier
         end
     end
 
-    -- Enable temporary noclip before going underground.
+    -- Enable noclip before going underground.
     applyNoclip()
 
-    -- Move the entire real rig 11 studs downward.
-    c:PivotTo(c:GetPivot() + Vector3.new(
-        0,
-        -INVISIBLE_OFFSET,
-        0
-    ))
+    -- Move physical body 11 studs down.
+    c:PivotTo(
+        c:GetPivot()
+        + Vector3.new(0, -OFFSET, 0)
+    )
 
     r.AssemblyLinearVelocity = Vector3.zero
     r.AssemblyAngularVelocity = Vector3.zero
 
-    -- Hide the real character locally.
-    for _, part in ipairs(c:GetDescendants()) do
-        if part:IsA("BasePart") then
-            part.LocalTransparencyModifier = 1
+    for _, p in ipairs(c:GetDescendants()) do
+        if p:IsA("BasePart") then
+            p.LocalTransparencyModifier = 1
         end
     end
 
-    -- Create a dedicated invisible support platform.
-    invisibleFloorY = r.Position.Y - 3.2
+    -- Initial underground walking surface.
+    floorY = r.Position.Y - FLOOR_DISTANCE
 
     invisibleFloor = makePlatform(
-        "KHASTIFY_InvisibleFloor",
+        "KHASTIFY_InvisibleSupport",
         Vector3.new(14, 0.5, 14)
     )
 
     invisibleFloor.Position = Vector3.new(
         r.Position.X,
-        invisibleFloorY - 0.25,
+        floorY - 0.25,
         r.Position.Z
     )
 
     invisibleActive = true
-    mirrorAvatar()
 
-    -- Track the visual root rather than the underground root.
-    if camera and visualRoot then
-        camera.CameraType = Enum.CameraType.Custom
-        camera.CameraSubject = visualRoot
-    end
+    mirrorAvatar()
+    applyInvisibleCamera()
 end
 
-local function updateInvisibleFloor()
+-- ==========================================
+-- TERRAIN-FOLLOWING UNDERGROUND PHYSICS
+-- ==========================================
+
+local function updateInvisible()
     if not invisibleActive then return end
 
+    local c = character()
     local r = root()
-    if not r then return end
+    local h = humanoid()
 
-    -- Maintain noclip while invisible.
+    if not c or not r or not h then return end
+
     applyNoclip()
 
-    -- Keep platform horizontally centered beneath the body.
+    local p = r.Position
+
+    -- Scan the real world at the visual avatar's height.
+    local visualY = p.Y + OFFSET
+
+    local detectedGround = groundAt(
+        p.X,
+        p.Z,
+        visualY
+    )
+
+    if detectedGround then
+        if not lastGroundY then
+            lastGroundY = detectedGround
+        end
+
+        local difference = detectedGround - lastGroundY
+
+        -- Small elevation changes, such as stairs,
+        -- are applied to the underground body.
+        if difference > 0
+            and difference <= MAX_STEP_UP then
+
+            setBodyY(r.Position.Y + difference)
+            lastGroundY = detectedGround
+
+        elseif difference < 0
+            and difference >= -MAX_STEP_DOWN then
+
+            setBodyY(r.Position.Y + difference)
+            lastGroundY = detectedGround
+
+        elseif math.abs(difference) < 0.05 then
+            lastGroundY = detectedGround
+        end
+    end
+
+    p = r.Position
+
+    -- Walking floor tracks the visible terrain.
+    -- It remains 11 studs beneath the corresponding
+    -- aboveground walking surface.
+    if lastGroundY then
+        floorY = lastGroundY - OFFSET
+    end
+
     if invisibleFloor then
         invisibleFloor.Position = Vector3.new(
-            r.Position.X,
-            invisibleFloorY - 0.25,
-            r.Position.Z
+            p.X,
+            floorY - 0.25,
+            p.Z
         )
     end
 
-    -- Noclip disables ordinary physical floor collisions.
-    -- This software safeguard maintains the support level.
     if not state.fly then
-        local floorLevel = invisibleFloorY + 3.2
+        -- The physical root must remain above its
+        -- underground walking support.
+        local minimumRootY = floorY + FLOOR_DISTANCE
 
-        if r.Position.Y < floorLevel then
-            local current = r.CFrame
+        if r.Position.Y < minimumRootY then
+            setBodyY(minimumRootY)
 
-            r.CFrame = CFrame.new(
-                current.Position.X,
-                floorLevel,
-                current.Position.Z
-            ) * current.Rotation
-
-            local velocity = r.AssemblyLinearVelocity
-
+            local v = r.AssemblyLinearVelocity
             r.AssemblyLinearVelocity = Vector3.new(
-                velocity.X,
-                math.max(velocity.Y, 0),
-                velocity.Z
+                v.X,
+                math.max(0, v.Y),
+                v.Z
+            )
+        end
+
+        -- The physical character must not jump high
+        -- enough to emerge through the visible ground.
+        --
+        -- The clearance accounts approximately for
+        -- the upper body extending above the root.
+        local maximumRootY =
+            (lastGroundY or (r.Position.Y + OFFSET))
+            - CEILING_CLEARANCE
+
+        if r.Position.Y > maximumRootY then
+            setBodyY(maximumRootY)
+
+            local v = r.AssemblyLinearVelocity
+            r.AssemblyLinearVelocity = Vector3.new(
+                v.X,
+                math.min(0, v.Y),
+                v.Z
             )
         end
     end
+
+    lastGroundPosition = r.Position
 end
 
--- ========================================
+-- ==========================================
 -- CHARACTER TOOLS
--- ========================================
+-- ==========================================
 
 local savedHeadTransparency = {}
 local savedHeadDecals = {}
@@ -594,15 +806,15 @@ local function setHeadless(enabled)
             end
         end
     else
-        for part, value in pairs(savedHeadTransparency) do
-            if part and part.Parent then
-                part.LocalTransparencyModifier = value
+        for p, v in pairs(savedHeadTransparency) do
+            if p and p.Parent then
+                p.LocalTransparencyModifier = v
             end
         end
 
-        for obj, value in pairs(savedHeadDecals) do
-            if obj and obj.Parent then
-                obj.Transparency = value
+        for p, v in pairs(savedHeadDecals) do
+            if p and p.Parent then
+                p.Transparency = v
             end
         end
 
@@ -657,9 +869,9 @@ local function selfFling()
     r.AssemblyAngularVelocity = Vector3.new(15, 20, 15)
 end
 
--- ========================================
+-- ==========================================
 -- LIGHTING
--- ========================================
+-- ==========================================
 
 local originalLighting = {
     Brightness = Lighting.Brightness,
@@ -675,15 +887,15 @@ local function fullbright(enabled)
         Lighting.FogEnd = 1000000
         Lighting.GlobalShadows = false
     else
-        for key, value in pairs(originalLighting) do
-            Lighting[key] = value
+        for k, v in pairs(originalLighting) do
+            Lighting[k] = v
         end
     end
 end
 
--- ========================================
+-- ==========================================
 -- UI
--- ========================================
+-- ==========================================
 
 local gui = Instance.new("ScreenGui")
 gui.Name = "KhastifyUniversalHub"
@@ -694,8 +906,8 @@ gui.Parent = parent
 local function create(class, props, container)
     local obj = Instance.new(class)
 
-    for key, value in pairs(props) do
-        obj[key] = value
+    for k, v in pairs(props) do
+        obj[k] = v
     end
 
     obj.Parent = container
@@ -737,7 +949,7 @@ local sidebar = create("Frame", {
 create("TextLabel", {
     Size = UDim2.fromOffset(118, 43),
     BackgroundTransparency = 1,
-    Text = "KHASTIFY  v8",
+    Text = "KHASTIFY  v9",
     TextColor3 = C.text,
     Font = Enum.Font.GothamBold,
     TextSize = 11
@@ -902,8 +1114,8 @@ local function toggle(text, key, callback)
         function()
             state[key] = not state[key]
 
-            b.Text = "  " .. text .. "     " ..
-                (state[key] and "ON" or "OFF")
+            b.Text = "  " .. text .. "     "
+                .. (state[key] and "ON" or "OFF")
 
             if callback then callback(state[key]) end
         end
@@ -965,6 +1177,7 @@ local function numberControl(text, key, callback)
     end
 
     bind(set.MouseButton1Click, apply)
+
     bind(input.FocusLost, function(enter)
         if enter then apply() end
     end)
@@ -998,9 +1211,9 @@ local function tab(name)
     end)
 end
 
--- ========================================
+-- ==========================================
 -- LOCAL PLAYER
--- ========================================
+-- ==========================================
 
 local function movementTab()
     label("MOVEMENT")
@@ -1010,7 +1223,6 @@ local function movementTab()
     end)
 
     numberControl("Fly Speed", "flySpeed")
-
     toggle("Fly Animation", "flyAnim")
 
     toggle("Noclip", "noclip", function(on)
@@ -1029,16 +1241,16 @@ local function movementTab()
     numberControl("Dash Power", "dashPower")
     button("Dash (Q)", dash)
 
-    numberControl("WalkSpeed", "speed", function(value)
+    numberControl("WalkSpeed", "speed", function(v)
         local h = humanoid()
-        if h then h.WalkSpeed = value end
+        if h then h.WalkSpeed = v end
     end)
 
-    numberControl("JumpPower", "jump", function(value)
+    numberControl("JumpPower", "jump", function(v)
         local h = humanoid()
         if h then
             h.UseJumpPower = true
-            h.JumpPower = value
+            h.JumpPower = v
         end
     end)
 end
@@ -1049,11 +1261,12 @@ local function characterTab()
     toggle("Invisible", "invisible", setInvisible)
 
     label("Real body: 11 studs underground")
-    label("Visual body: 30% transparent")
-    label("Automatic Noclip + support floor")
+    label("Transparent body: exact pose mirror")
+    label("Terrain following + ceiling protection")
 
     button("Emotes", function()
         local h = humanoid()
+
         if h then
             pcall(function()
                 h:PlayEmote("wave")
@@ -1120,9 +1333,9 @@ sections.Players = function()
 
     local playerList = {}
 
-    for _, player in ipairs(Players:GetPlayers()) do
-        if player ~= LP then
-            table.insert(playerList, player)
+    for _, p in ipairs(Players:GetPlayers()) do
+        if p ~= LP then
+            table.insert(playerList, p)
         end
     end
 
@@ -1130,13 +1343,13 @@ sections.Players = function()
         return a.Name:lower() < b.Name:lower()
     end)
 
-    for _, player in ipairs(playerList) do
+    for _, p in ipairs(playerList) do
         button(
-            player.DisplayName .. " (@" .. player.Name .. ") → TP",
+            p.DisplayName .. " (@" .. p.Name .. ") → TP",
             function()
                 local r = root()
-                local target = player.Character and
-                    player.Character:FindFirstChild("HumanoidRootPart")
+                local target = p.Character and
+                    p.Character:FindFirstChild("HumanoidRootPart")
 
                 if r and target then
                     if state.invisible then
@@ -1215,6 +1428,7 @@ for _, name in ipairs({
 
     sections[sectionName] = function()
         label(sectionName:upper())
+
         button("Open Local Player", function()
             show("Local Player")
         end)
@@ -1275,9 +1489,9 @@ for i, entry in ipairs(entries) do
     end)
 end
 
--- ========================================
+-- ==========================================
 -- COMMAND BAR
--- ========================================
+-- ==========================================
 
 local function executeCommand()
     local cmd = commandInput.Text:lower():match("^%s*(.-)%s*$")
@@ -1363,9 +1577,9 @@ bind(minimize.MouseButton1Click, function()
     window.Visible = false
 end)
 
--- ========================================
--- DRAGGING
--- ========================================
+-- ==========================================
+-- DRAGGABLE WINDOW
+-- ==========================================
 
 local dragging = false
 local dragStart
@@ -1400,6 +1614,7 @@ bind(UIS.InputEnded, function(input)
             dragging = false
 
             local camera = workspace.CurrentCamera
+
             if camera then
                 local size = camera.ViewportSize
 
@@ -1421,9 +1636,9 @@ bind(UIS.InputEnded, function(input)
     end
 end)
 
--- ========================================
+-- ==========================================
 -- INPUT
--- ========================================
+-- ==========================================
 
 bind(UIS.InputBegan, function(input, processed)
     if processed or UIS:GetFocusedTextBox() then return end
@@ -1437,6 +1652,7 @@ bind(UIS.InputBegan, function(input, processed)
             and state.infiniteJump then
 
             local h = humanoid()
+
             if h then
                 h:ChangeState(Enum.HumanoidStateType.Jumping)
             end
@@ -1520,9 +1736,9 @@ bind(UIS.InputBegan, function(input, processed)
     end
 end)
 
--- ========================================
+-- ==========================================
 -- CONTINUOUS UPDATES
--- ========================================
+-- ==========================================
 
 bind(Run.Stepped, function()
     if state.noclip or state.invisible then
@@ -1542,11 +1758,10 @@ bind(Run.Heartbeat, function()
     end
 
     if state.invisible then
-        updateInvisibleFloor()
+        updateInvisible()
     end
 end)
 
--- Render after animation updates.
 bind(Run.RenderStepped, function()
     if state.invisible then
         mirrorAvatar()
@@ -1591,16 +1806,16 @@ bind(Run.RenderStepped, function()
     end
 end)
 
--- ========================================
+-- ==========================================
 -- RESPAWN
--- ========================================
+-- ==========================================
 
 bind(LP.CharacterAdded, function(c)
     stopFly()
     stopAirWalk()
 
     invisibleActive = false
-    destroyVisual()
+    destroyInvisibleObjects()
 
     state.invisible = false
     state.airWalk = false
@@ -1610,6 +1825,10 @@ bind(LP.CharacterAdded, function(c)
     table.clear(originalTransparency)
     table.clear(savedHeadTransparency)
     table.clear(savedHeadDecals)
+
+    originalCameraSubject = nil
+    originalCameraType = nil
+    originalCameraOffset = nil
 
     local h = c:WaitForChild("Humanoid", 10)
 
@@ -1640,9 +1859,9 @@ end
 
 show("Local Player")
 
--- ========================================
+-- ==========================================
 -- CLEANUP
--- ========================================
+-- ==========================================
 
 _G.KHASTIFY_HUB_CLEANUP = function()
     state.fly = false
@@ -1676,5 +1895,5 @@ _G.KHASTIFY_HUB_CLEANUP = function()
     _G.KHASTIFY_HUB_CLEANUP = nil
 end
 
-print("KHASTIFY'S UNIVERSAL HUB V8 LOADED")
+print("KHASTIFY'S UNIVERSAL HUB V9 LOADED")
 print("Press " .. state.menuKey .. " to open the menu.")
