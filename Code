@@ -1,16 +1,21 @@
 --[[
-    KHASTIFY'S UNIVERSAL HUB V40
+    KHASTIFY'S UNIVERSAL HUB V41
 
-    V40:
-    - Commands icon preserved
-    - Servers icon preserved
-    - Solid microphone arms
-    - Rebuilt symmetrical Players icon
-    - Reliable lightning bolt
-    - Smooth six-tooth Settings gear
-    - No image assets required
-    - HTTP 429 retry handling
-    - Auto Execute preserved
+    ICONS:
+    Commands   - Approved V38 terminal
+    Voice Chat - Solid-arm microphone
+    Players    - Restored V38 design
+    Actions    - Four-point diamond sparkle
+    Servers    - Approved V38 racks
+    Settings   - Six-tooth gear
+
+    FEATURES:
+    - Auto Execute
+    - Server browser with HTTP 429 retries
+    - Movement and character commands
+    - Player browser
+    - Custom keybinds
+    - Saved settings
 
     K = Toggle Hub
     Q = Dash
@@ -140,7 +145,7 @@ local C = {
 }
 
 --==================================================
--- V40 ICON ENGINE
+-- V41 ICON ENGINE
 --==================================================
 
 local ICON_SIZE = 120
@@ -254,7 +259,55 @@ local function Arc(
 end
 
 --==================================================
--- COMMANDS ICON - V38 PRESERVED
+-- CUBIC BEZIER CURVES
+--==================================================
+
+local function BezierPoint(a, b, c, d, t)
+    local u = 1 - t
+
+    return
+        a * u * u * u
+        + 3 * b * u * u * t
+        + 3 * c * u * t * t
+        + d * t * t * t
+end
+
+local function BezierCurve(
+    parent,
+    p0, p1, p2, p3,
+    color,
+    thickness,
+    segments
+)
+    local lastX = p0[1]
+    local lastY = p0[2]
+
+    for i = 1, segments do
+        local t = i / segments
+
+        local x = BezierPoint(
+            p0[1], p1[1], p2[1], p3[1], t
+        )
+
+        local y = BezierPoint(
+            p0[2], p1[2], p2[2], p3[2], t
+        )
+
+        IconLine(
+            parent,
+            lastX, lastY,
+            x, y,
+            color,
+            thickness
+        )
+
+        lastX = x
+        lastY = y
+    end
+end
+
+--==================================================
+-- COMMANDS - APPROVED
 --==================================================
 
 local function DrawCommands(parent, color)
@@ -266,11 +319,11 @@ local function DrawCommands(parent, color)
 end
 
 --==================================================
--- VOICE CHAT ICON - SOLID ARMS
+-- VOICE CHAT - SOLID ARMS
 --==================================================
 
 local function DrawVoice(parent, color)
-    -- Main microphone capsule.
+    -- Main capsule.
     IconFrame(
         parent,
         43, 14,
@@ -279,11 +332,10 @@ local function DrawVoice(parent, color)
         17
     )
 
-    -- Solid vertical support arms.
-    IconFrame(parent, 25, 51, 8, 17, color, 4)
-    IconFrame(parent, 87, 51, 8, 17, color, 4)
+    -- Continuous U-shaped support.
+    -- Draw the curve first, then overlap the vertical
+    -- sections so the joins are completely solid.
 
-    -- Smooth symmetrical lower support.
     Arc(
         parent,
         60, 66,
@@ -291,172 +343,185 @@ local function DrawVoice(parent, color)
         0,
         math.pi,
         color,
-        8,
-        64
+        9,
+        48
     )
 
-    -- Centered microphone stem.
-    IconFrame(parent, 56, 96, 8, 13, color, 4)
+    -- Left arm.
+    IconFrame(
+        parent,
+        25, 49,
+        9, 20,
+        color,
+        4
+    )
 
-    -- Balanced horizontal base.
-    IconFrame(parent, 42, 105, 36, 8, color, 4)
+    -- Right arm.
+    IconFrame(
+        parent,
+        86, 49,
+        9, 20,
+        color,
+        4
+    )
+
+    -- Fill the lower arm-to-curve connections.
+    IconCircle(parent, 25, 62, 9, color)
+    IconCircle(parent, 86, 62, 9, color)
+
+    -- Center stem.
+    IconFrame(
+        parent,
+        56, 94,
+        8, 16,
+        color,
+        4
+    )
+
+    -- Base.
+    IconFrame(
+        parent,
+        42, 105,
+        36, 8,
+        color,
+        4
+    )
 end
 
 --==================================================
--- PLAYERS ICON - REBUILT
+-- PLAYERS - V38 RESTORED
 --==================================================
 
 local function DrawPlayers(parent, color)
-    -- Both figures share the same proportions.
-    -- Rear figure sits slightly higher and to the right.
+    -- Rear figure.
+    IconCircle(parent, 76, 20, 25, color, 7)
 
-    -- Rear head.
-    IconCircle(
+    IconOutline(
         parent,
-        70, 18,
-        26,
+        57, 55,
+        51, 43,
+        color, 7, 16
+    )
+
+    -- Front figure.
+    local mask = IconFrame(
+        parent,
+        14, 54,
+        68, 53,
+        C.side,
+        18
+    )
+
+    mask.ZIndex = 3
+
+    local body = IconOutline(
+        parent,
+        14, 54,
+        68, 53,
+        color, 7, 18
+    )
+
+    body.ZIndex = 4
+
+    local head = IconCircle(
+        parent,
+        29, 15,
+        34,
         color,
         7
     )
 
-    -- Rear shoulders and torso.
-    Arc(
-        parent,
-        83, 85,
-        23, 23,
-        math.pi,
-        2 * math.pi,
-        color,
-        7,
-        36
-    )
-
-    IconLine(parent, 60, 85, 60, 101, color, 7)
-    IconLine(parent, 106, 85, 106, 101, color, 7)
-    IconLine(parent, 60, 101, 106, 101, color, 7)
-
-    -- Front figure is drawn last to preserve overlap.
-    -- Front head.
-    IconCircle(
-        parent,
-        22, 22,
-        32,
-        color,
-        7
-    )
-
-    -- Front shoulders.
-    Arc(
-        parent,
-        38, 86,
-        28, 27,
-        math.pi,
-        2 * math.pi,
-        color,
-        7,
-        44
-    )
-
-    -- Front torso.
-    IconLine(parent, 10, 86, 10, 108, color, 7)
-    IconLine(parent, 66, 86, 66, 108, color, 7)
-    IconLine(parent, 10, 108, 66, 108, color, 7)
+    head.ZIndex = 5
 end
 
 --==================================================
--- ACTIONS ICON - SOLID LIGHTNING
+-- ACTIONS - FOUR-POINT DIAMOND SPARKLE
 --==================================================
 
 local function DrawActions(parent, color)
-    -- Constructed from connected thick strokes.
-    -- No scanline fill or hundreds of tiny rectangles.
+    -- Four-point diamond sparkle matching the reference.
+    --
+    -- Symmetrical pointed ends:
+    -- Top    (60, 10)
+    -- Right  (110, 60)
+    -- Bottom (60, 110)
+    -- Left   (10, 60)
+    --
+    -- Each side curves inward toward the center.
+    -- The outline remains hollow.
 
-    local points = {
-        {70, 12},
-        {34, 62},
-        {56, 62},
-        {46, 108},
-        {90, 50},
-        {66, 50}
-    }
+    local thickness = 11
+    local segments = 12
 
-    -- Fill using a small number of connected lines.
-    -- This avoids the disappearing V39 scanline issue.
+    -- TOP -> RIGHT
+    BezierCurve(
+        parent,
+        {60, 10},
+        {73, 43},
+        {77, 47},
+        {110, 60},
+        color,
+        thickness,
+        segments
+    )
 
-    local function FillTriangle(a, b, c)
-        local minY = math.floor(math.min(a[2], b[2], c[2]))
-        local maxY = math.ceil(math.max(a[2], b[2], c[2]))
+    -- RIGHT -> BOTTOM
+    BezierCurve(
+        parent,
+        {110, 60},
+        {77, 73},
+        {73, 77},
+        {60, 110},
+        color,
+        thickness,
+        segments
+    )
 
-        for y = minY, maxY, 2 do
-            local intersections = {}
+    -- BOTTOM -> LEFT
+    BezierCurve(
+        parent,
+        {60, 110},
+        {47, 77},
+        {43, 73},
+        {10, 60},
+        color,
+        thickness,
+        segments
+    )
 
-            local edges = {
-                {a, b},
-                {b, c},
-                {c, a}
-            }
+    -- LEFT -> TOP
+    BezierCurve(
+        parent,
+        {10, 60},
+        {43, 47},
+        {47, 43},
+        {60, 10},
+        color,
+        thickness,
+        segments
+    )
 
-            for _, edge in ipairs(edges) do
-                local p1 = edge[1]
-                local p2 = edge[2]
+    -- Rounded tips.
+    local tipSize = thickness
 
-                if p1[2] ~= p2[2]
-                    and y >= math.min(p1[2], p2[2])
-                    and y < math.max(p1[2], p2[2]) then
-
-                    local t =
-                        (y - p1[2]) / (p2[2] - p1[2])
-
-                    table.insert(
-                        intersections,
-                        p1[1] + (p2[1] - p1[1]) * t
-                    )
-                end
-            end
-
-            table.sort(intersections)
-
-            if #intersections >= 2 then
-                IconFrame(
-                    parent,
-                    intersections[1],
-                    y,
-                    intersections[#intersections]
-                        - intersections[1],
-                    3,
-                    color
-                )
-            end
-        end
+    for _, point in ipairs({
+        {60, 10},
+        {110, 60},
+        {60, 110},
+        {10, 60}
+    }) do
+        IconCircle(
+            parent,
+            point[1] - tipSize / 2,
+            point[2] - tipSize / 2,
+            tipSize,
+            color
+        )
     end
-
-    FillTriangle(
-        points[1],
-        points[2],
-        points[6]
-    )
-
-    FillTriangle(
-        points[2],
-        points[3],
-        points[6]
-    )
-
-    FillTriangle(
-        points[3],
-        points[4],
-        points[5]
-    )
-
-    FillTriangle(
-        points[3],
-        points[5],
-        points[6]
-    )
 end
 
 --==================================================
--- SERVERS ICON - V38 PRESERVED
+-- SERVERS - APPROVED
 --==================================================
 
 local function DrawServers(parent, color)
@@ -465,24 +530,20 @@ local function DrawServers(parent, color)
             parent,
             13, y,
             94, 35,
-            color,
-            8,
-            10
+            color, 8, 10
         )
 
         IconCircle(
             parent,
             28, y + 13,
-            9,
-            color
+            9, color
         )
 
         IconLine(
             parent,
             65, y + 18,
             88, y + 18,
-            color,
-            8
+            color, 8
         )
     end
 
@@ -491,13 +552,12 @@ local function DrawServers(parent, color)
 end
 
 --==================================================
--- SETTINGS ICON - SIX-TOOTH GEAR
+-- SETTINGS - SIX-TOOTH GEAR
 --==================================================
 
 local function DrawSettings(parent, color)
     local cx, cy = 60, 60
 
-    -- Smooth circular body.
     Arc(
         parent,
         cx, cy,
@@ -509,7 +569,6 @@ local function DrawSettings(parent, color)
         72
     )
 
-    -- Six evenly spaced teeth.
     for i = 0, 5 do
         local angle = i * math.pi / 3
 
@@ -527,7 +586,6 @@ local function DrawSettings(parent, color)
         )
     end
 
-    -- Center opening.
     IconCircle(
         parent,
         47, 47,
@@ -852,7 +910,10 @@ local Collisions = {}
 
 local function Noclip()
     local c = Char()
-    if not c then return end
+
+    if not c then
+        return
+    end
 
     for _, part in ipairs(c:GetDescendants()) do
         if part:IsA("BasePart") then
@@ -879,8 +940,13 @@ local FlyVelocity
 local FlyGyro
 
 local function StopFly()
-    if FlyVelocity then FlyVelocity:Destroy() end
-    if FlyGyro then FlyGyro:Destroy() end
+    if FlyVelocity then
+        FlyVelocity:Destroy()
+    end
+
+    if FlyGyro then
+        FlyGyro:Destroy()
+    end
 
     FlyVelocity = nil
     FlyGyro = nil
@@ -965,6 +1031,7 @@ local function Dash()
     end
 
     local direction = camera.CFrame.LookVector
+
     direction = Vector3.new(
         direction.X,
         0,
@@ -1151,7 +1218,9 @@ end
 
 local function GroundAt(x, z, referenceY)
     local params = RaycastParams.new()
-    params.FilterType = Enum.RaycastFilterType.Exclude
+
+    params.FilterType =
+        Enum.RaycastFilterType.Exclude
 
     local excluded = {}
 
@@ -1627,7 +1696,7 @@ Brand.Size = UDim2.fromOffset(135, 25)
 
 local Version = Label(
     Sidebar,
-    "universal hub v40",
+    "universal hub v41",
     11,
     C.muted
 )
@@ -3470,7 +3539,7 @@ Sections.Settings = function()
 
     local title = Label(
         card,
-        "V40 GUI Icons",
+        "V41 GUI Icons",
         14,
         C.text,
         true
@@ -3491,7 +3560,7 @@ Sections.Settings = function()
 
     local description = Label(
         card,
-        "30x30 display · no external assets",
+        "Diamond sparkle · solid microphone · no assets",
         11,
         C.faint
     )
@@ -3501,7 +3570,7 @@ Sections.Settings = function()
 
     AddEntry(
         card,
-        "v40 icon system",
+        "v41 icon system",
         "All"
     )
 end
@@ -4059,12 +4128,12 @@ _G.KHASTIFY_HUB_CLEANUP = function()
 end
 
 print("====================================")
-print("KHASTIFY'S UNIVERSAL HUB V40")
-print("REBUILT GUI ICONS ENABLED")
+print("KHASTIFY'S UNIVERSAL HUB V41")
+print("FOUR-POINT DIAMOND SPARKLE ENABLED")
+print("V38 PLAYERS ICON RESTORED")
+print("SOLID MICROPHONE SUPPORT")
 print("SIX-TOOTH SETTINGS GEAR")
-print("NO IMAGE ASSETS REQUIRED")
 print("SERVER RATE-LIMIT HANDLING ENABLED")
 print("AUTO EXECUTE PRESERVED")
-print("SERVERS > ALL PRESERVED")
 print("Press " .. State.menuKey .. " to open.")
 print("====================================")
