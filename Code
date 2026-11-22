@@ -1,7 +1,7 @@
 --[[
-    KHASTIFY'S UNIVERSAL HUB V11
-    Player Cards + Avatar Thumbnails + Expandable Actions
-    Client-side Roblox utility hub
+    KHASTIFY'S UNIVERSAL HUB V12
+    Restored Vector Icons + Dynamic Page Icons
+    V11 Player Cards / V9 Invisibility
 ]]
 
 local Players = game:GetService("Players")
@@ -10,7 +10,6 @@ local Run = game:GetService("RunService")
 local Lighting = game:GetService("Lighting")
 local Http = game:GetService("HttpService")
 local TeleportService = game:GetService("TeleportService")
-
 local LP = Players.LocalPlayer
 
 if _G.KHASTIFY_HUB_CLEANUP then
@@ -24,10 +23,10 @@ if old then old:Destroy() end
 local connections = {}
 local alive = true
 
-local function bind(signal, fn)
-    local c = signal:Connect(fn)
-    table.insert(connections, c)
-    return c
+local function bind(signal, callback)
+    local connection = signal:Connect(callback)
+    table.insert(connections, connection)
+    return connection
 end
 
 local function char()
@@ -138,6 +137,172 @@ local function label(parentObj, value, size, color, bold)
         TextXAlignment = Enum.TextXAlignment.Left,
         TextYAlignment = Enum.TextYAlignment.Center
     }, parentObj)
+end
+
+-- ==========================================
+-- SHARED VECTOR ICON SYSTEM
+-- ==========================================
+-- Used by BOTH sidebar and page headings.
+
+local function iconLine(parentObj, x1, y1, x2, y2, color, thickness)
+    local dx = x2 - x1
+    local dy = y2 - y1
+    local length = math.sqrt(dx * dx + dy * dy)
+
+    local line = create("Frame", {
+        AnchorPoint = Vector2.new(0.5, 0.5),
+        Position = UDim2.fromOffset(
+            (x1 + x2) / 2,
+            (y1 + y2) / 2
+        ),
+        Size = UDim2.fromOffset(length, thickness or 1.6),
+        Rotation = math.deg(math.atan2(dy, dx)),
+        BackgroundColor3 = color,
+        BorderSizePixel = 0
+    }, parentObj)
+
+    corner(line, 2)
+    return line
+end
+
+local function iconCircle(parentObj, x, y, radius, color)
+    local circle = create("Frame", {
+        Position = UDim2.fromOffset(x - radius, y - radius),
+        Size = UDim2.fromOffset(radius * 2, radius * 2),
+        BackgroundTransparency = 1,
+        BorderSizePixel = 0
+    }, parentObj)
+
+    create("UICorner", {
+        CornerRadius = UDim.new(1, 0)
+    }, circle)
+
+    create("UIStroke", {
+        Color = color,
+        Thickness = 1.5
+    }, circle)
+
+    return circle
+end
+
+local function iconRect(parentObj, x, y, w, h, color, radius)
+    local rect = create("Frame", {
+        Position = UDim2.fromOffset(x, y),
+        Size = UDim2.fromOffset(w, h),
+        BackgroundTransparency = 1,
+        BorderSizePixel = 0
+    }, parentObj)
+
+    corner(rect, radius or 2)
+
+    create("UIStroke", {
+        Color = color,
+        Thickness = 1.5
+    }, rect)
+
+    return rect
+end
+
+local function drawIcon(parentObj, kind, color)
+    color = color or C.muted
+
+    if kind == "commands" then
+        iconLine(parentObj, 2, 5, 7, 9, color, 1.8)
+        iconLine(parentObj, 7, 9, 2, 13, color, 1.8)
+        iconLine(parentObj, 10, 15, 18, 15, color, 1.8)
+
+    elseif kind == "voice" then
+        -- Microphone capsule
+        iconRect(parentObj, 7, 2, 6, 10, color, 4)
+
+        -- Microphone cradle
+        iconLine(parentObj, 4, 9, 4, 12, color)
+        iconLine(parentObj, 16, 9, 16, 12, color)
+        iconLine(parentObj, 4, 12, 7, 15, color)
+        iconLine(parentObj, 7, 15, 13, 15, color)
+        iconLine(parentObj, 13, 15, 16, 12, color)
+
+        -- Stand
+        iconLine(parentObj, 10, 15, 10, 18, color)
+        iconLine(parentObj, 7, 18, 13, 18, color)
+
+    elseif kind == "players" then
+        -- Two heads
+        iconCircle(parentObj, 7, 6, 3, color)
+        iconCircle(parentObj, 15, 7, 2.5, color)
+
+        -- Front person's shoulders
+        iconLine(parentObj, 2, 17, 2, 14, color)
+        iconLine(parentObj, 2, 14, 5, 11, color)
+        iconLine(parentObj, 5, 11, 9, 11, color)
+        iconLine(parentObj, 9, 11, 12, 14, color)
+        iconLine(parentObj, 12, 14, 12, 17, color)
+
+        -- Second person's shoulders
+        iconLine(parentObj, 14, 12, 17, 13, color)
+        iconLine(parentObj, 17, 13, 19, 16, color)
+        iconLine(parentObj, 19, 16, 19, 18, color)
+
+    elseif kind == "actions" then
+        -- Diagonal magic wand
+        iconLine(parentObj, 4, 17, 16, 5, color, 2.4)
+
+        -- Sparkles
+        iconLine(parentObj, 3, 3, 3, 8, color)
+        iconLine(parentObj, 1, 5.5, 5, 5.5, color)
+
+        iconLine(parentObj, 15, 12, 15, 17, color)
+        iconLine(parentObj, 12.5, 14.5, 17.5, 14.5, color)
+
+        iconLine(parentObj, 11, 1, 11, 4, color)
+
+    elseif kind == "servers" then
+        -- Two stacked server units
+        iconRect(parentObj, 2, 2, 16, 7, color, 2)
+        iconRect(parentObj, 2, 11, 16, 7, color, 2)
+
+        -- Status indicators
+        iconCircle(parentObj, 5.5, 5.5, 0.8, color)
+        iconCircle(parentObj, 5.5, 14.5, 0.8, color)
+
+    elseif kind == "settings" then
+        -- Gear ring
+        iconCircle(parentObj, 10, 10, 5.5, color)
+        iconCircle(parentObj, 10, 10, 2, color)
+
+        for i = 0, 7 do
+            local angle = math.rad(i * 45)
+
+            iconLine(
+                parentObj,
+                10 + math.cos(angle) * 6,
+                10 + math.sin(angle) * 6,
+                10 + math.cos(angle) * 9,
+                10 + math.sin(angle) * 9,
+                color,
+                1.5
+            )
+        end
+    end
+end
+
+local function makeIcon(parentObj, kind, color, x, y, scale)
+    local holder = create("Frame", {
+        Position = UDim2.fromOffset(x or 0, y or 0),
+        Size = UDim2.fromOffset(20, 20),
+        BackgroundTransparency = 1,
+        BorderSizePixel = 0
+    }, parentObj)
+
+    if scale and scale ~= 1 then
+        create("UIScale", {
+            Scale = scale
+        }, holder)
+    end
+
+    drawIcon(holder, kind, color)
+
+    return holder
 end
 
 -- ==========================================
@@ -715,7 +880,7 @@ local function fullbright(enabled)
 end
 
 -- ==========================================
--- UI
+-- MAIN UI
 -- ==========================================
 
 local gui = create("ScreenGui", {
@@ -760,7 +925,7 @@ local brand = label(sidebar, "KHASTIFY", 15, C.text, true)
 brand.Position = UDim2.fromOffset(24, 32)
 brand.Size = UDim2.fromOffset(115, 24)
 
-local version = label(sidebar, "universal hub v11", 9, C.muted)
+local version = label(sidebar, "universal hub v12", 9, C.muted)
 version.Position = UDim2.fromOffset(24, 55)
 version.Size = UDim2.fromOffset(115, 18)
 
@@ -775,9 +940,16 @@ local topbar = create("Frame", {
     BackgroundTransparency = 1
 }, main)
 
-local heading = label(topbar, "›_  commands", 16, C.text, true)
-heading.Position = UDim2.fromOffset(17, 15)
-heading.Size = UDim2.new(1, -110, 0, 30)
+-- Dynamic heading icon
+local headingIconHolder = create("Frame", {
+    Position = UDim2.fromOffset(17, 20),
+    Size = UDim2.fromOffset(20, 20),
+    BackgroundTransparency = 1
+}, topbar)
+
+local heading = label(topbar, "commands", 16, C.text, true)
+heading.Position = UDim2.fromOffset(47, 15)
+heading.Size = UDim2.new(1, -140, 0, 30)
 
 local close = create("TextButton", {
     Position = UDim2.new(1, -37, 0, 15),
@@ -809,9 +981,14 @@ local searchFrame = create("Frame", {
 corner(searchFrame, 10)
 stroke(searchFrame)
 
-local searchIcon = label(searchFrame, "⌕", 23, C.muted)
-searchIcon.Position = UDim2.fromOffset(16, 0)
-searchIcon.Size = UDim2.fromOffset(25, 48)
+local searchIconHolder = create("Frame", {
+    Position = UDim2.fromOffset(16, 14),
+    Size = UDim2.fromOffset(20, 20),
+    BackgroundTransparency = 1
+}, searchFrame)
+
+iconCircle(searchIconHolder, 8, 8, 5, C.muted)
+iconLine(searchIconHolder, 12, 12, 17, 17, C.muted)
 
 local searchBox = create("TextBox", {
     Position = UDim2.fromOffset(46, 0),
@@ -861,31 +1038,25 @@ bind(listLayout:GetPropertyChangedSignal("AbsoluteContentSize"), function()
 end)
 
 -- ==========================================
--- SIDEBAR ICONS
+-- SIDEBAR
 -- ==========================================
 
-local function icon(parentObj, symbol, color)
-    local text = label(parentObj, symbol, 17, color, true)
-    text.Position = UDim2.fromOffset(13, 0)
-    text.Size = UDim2.fromOffset(24, 39)
-    text.TextXAlignment = Enum.TextXAlignment.Center
-    return text
-end
-
 local nav = {
-    {"Commands", "›_"},
-    {"Voice Chat", "♩"},
-    {"Players", "♙"},
-    {"Actions", "✧"},
-    {"Servers", "▣"},
-    {"Settings", "⚙"}
+    {"Commands", "commands"},
+    {"Voice Chat", "voice"},
+    {"Players", "players"},
+    {"Actions", "actions"},
+    {"Servers", "servers"},
+    {"Settings", "settings"}
 }
 
 local navButtons = {}
 local active = "Commands"
 
 for i, entry in ipairs(nav) do
-    local name, symbol = entry[1], entry[2]
+    local name = entry[1]
+    local iconKind = entry[2]
+
     local y = name == "Settings" and HEIGHT - 58
         or 105 + (i - 1) * 43
 
@@ -900,7 +1071,11 @@ for i, entry in ipairs(nav) do
 
     corner(b, 7)
 
-    local glyph = icon(b, symbol, C.muted)
+    local iconHolder = create("Frame", {
+        Position = UDim2.fromOffset(13, 10),
+        Size = UDim2.fromOffset(20, 20),
+        BackgroundTransparency = 1
+    }, b)
 
     local nameLabel = label(b, name, 11, C.muted)
     nameLabel.Position = UDim2.fromOffset(43, 0)
@@ -918,7 +1093,8 @@ for i, entry in ipairs(nav) do
 
     navButtons[name] = {
         button = b,
-        glyph = glyph,
+        iconHolder = iconHolder,
+        iconKind = iconKind,
         label = nameLabel,
         indicator = indicator
     }
@@ -931,9 +1107,6 @@ local function updateNav()
         data.button.BackgroundColor3 =
             selected and C.selected or C.side
 
-        data.glyph.TextColor3 =
-            selected and C.purple or C.muted
-
         data.label.TextColor3 =
             selected and C.text or C.muted
 
@@ -941,6 +1114,33 @@ local function updateNav()
             selected and Enum.Font.GothamBold or Enum.Font.Gotham
 
         data.indicator.Visible = selected
+
+        -- Redraw vector icon in selected/unselected color.
+        for _, child in ipairs(data.iconHolder:GetChildren()) do
+            child:Destroy()
+        end
+
+        drawIcon(
+            data.iconHolder,
+            data.iconKind,
+            selected and C.purple or C.muted
+        )
+    end
+end
+
+local function updateHeadingIcon(sectionName)
+    for _, child in ipairs(headingIconHolder:GetChildren()) do
+        child:Destroy()
+    end
+
+    local data = navButtons[sectionName]
+
+    if data then
+        drawIcon(
+            headingIconHolder,
+            data.iconKind,
+            C.purple
+        )
     end
 end
 
@@ -1175,7 +1375,7 @@ local function number(name, key, category, maximum, callback)
 end
 
 -- ==========================================
--- COMMANDS SECTION
+-- COMMANDS
 -- ==========================================
 
 sections.Commands = function()
@@ -1251,7 +1451,7 @@ sections.Commands = function()
 end
 
 -- ==========================================
--- PLAYER LIST V11
+-- PLAYER LIST
 -- ==========================================
 
 local expandedUserId = nil
@@ -1298,6 +1498,7 @@ local function teleportToPlayer(player)
     end
 end
 
+-- Local-only physics demonstration.
 local function localFlingDemo()
     local r = root()
     if not r then return end
@@ -1376,7 +1577,7 @@ local function makePlayerCard(player, generation)
         AutoButtonColor = false
     }, card)
 
-    local divider = create("Frame", {
+    create("Frame", {
         Position = UDim2.fromOffset(12, 59),
         Size = UDim2.new(1, -24, 0, 1),
         BackgroundColor3 = C.border,
@@ -1390,7 +1591,6 @@ local function makePlayerCard(player, generation)
     }, card)
 
     local tp = create("TextButton", {
-        Position = UDim2.new(0, 0, 0, 0),
         Size = UDim2.new(0.48, 0, 1, 0),
         BackgroundColor3 = C.selected,
         BorderSizePixel = 0,
@@ -1422,7 +1622,6 @@ local function makePlayerCard(player, generation)
         )
 
         arrow.Text = expanded and "⌃" or "⌄"
-
         card.BackgroundColor3 =
             expanded and C.hover or C.card
     end
@@ -1631,7 +1830,10 @@ showSection = function(name)
     searchBox.PlaceholderText =
         "search " .. name:lower() .. "..."
 
-    heading.Text = "›_  " .. name:lower()
+    heading.Text = name:lower()
+
+    -- V12: Heading icon always matches the selected menu.
+    updateHeadingIcon(name)
 
     clearList()
 
@@ -1995,5 +2197,5 @@ _G.KHASTIFY_HUB_CLEANUP = function()
     _G.KHASTIFY_HUB_CLEANUP = nil
 end
 
-print("KHASTIFY'S UNIVERSAL HUB V11 LOADED")
+print("KHASTIFY'S UNIVERSAL HUB V12 LOADED")
 print("Press " .. state.menuKey .. " to open the menu.")
