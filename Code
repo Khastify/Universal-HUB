@@ -1,22 +1,20 @@
 --[[
-    KHASTIFY'S UNIVERSAL HUB V47
+    KHASTIFY'S UNIVERSAL HUB V48
 
-    CHANGES:
-    - Redesigned six-tooth Settings gear
-    - Rounded tooth tips and smooth valleys
-    - Truly hollow gear center
-    - Removed Sit completely
+    V48 CHANGES:
+    - Settings gear completely removed
+    - Settings text centered horizontally and vertically
+    - No Settings icon in the page heading
 
     PRESERVED:
-    - Commands icon
-    - Players icon
-    - Servers icon
-    - Commands / Players / Servers / Settings
-    - Unstuck / Respawn / Self Fling
+    - Original Commands icon
+    - Original Players icon
+    - Original Servers icon
+    - Four sidebar tabs
+    - All V47 commands and features
+    - Sit remains removed
     - Auto Execute
-    - HTTP 429 retry handling
-    - Player browser
-    - Server browser
+    - HTTP 429 handling
 
     K = Toggle Hub
     Q = Dash
@@ -308,196 +306,13 @@ local function DrawServers(parent, color)
 end
 
 --==================================================
--- V47 SETTINGS GEAR
---==================================================
-
-local function DrawSettings(parent, color)
-    -- Six rounded teeth.
-    --
-    -- The outline is calculated from six identical
-    -- radial profiles, ensuring symmetry.
-    --
-    -- The tooth shape has:
-    --   Rounded outer tip
-    --   Smooth shoulder
-    --   Concave valley
-    --
-    -- No solid disk or background-colored mask.
-
-    local cx = 60
-    local cy = 60
-
-    local teeth = 6
-    local stepsPerTooth = 24
-
-    local strokeWidth = 6.5
-
-    local outerRadius = 49
-    local valleyRadius = 37
-
-    local points = {}
-
-    local function Smooth(t)
-        t = math.clamp(t, 0, 1)
-        return t * t * (3 - 2 * t)
-    end
-
-    local function RadiusAt(phase)
-        -- Phase runs from -0.5 to 0.5 for each tooth.
-        -- Tooth centered at phase 0.
-
-        local d = math.abs(phase)
-
-        local flatEnd = 0.115
-        local shoulderEnd = 0.315
-        local valleyStart = 0.385
-
-        if d <= flatEnd then
-            return outerRadius
-
-        elseif d < shoulderEnd then
-            local t = (d - flatEnd)
-                / (shoulderEnd - flatEnd)
-
-            return outerRadius
-                - (outerRadius - valleyRadius) * Smooth(t)
-
-        elseif d < valleyStart then
-            return valleyRadius
-
-        else
-            return valleyRadius
-        end
-    end
-
-    for tooth = 0, teeth - 1 do
-        for step = 0, stepsPerTooth - 1 do
-            local phase = step / stepsPerTooth - 0.5
-
-            local angle =
-                -math.pi / 2
-                + tooth * (math.pi * 2 / teeth)
-                + phase * (math.pi * 2 / teeth)
-
-            local radius = RadiusAt(phase)
-
-            table.insert(points, {
-                cx + math.cos(angle) * radius,
-                cy + math.sin(angle) * radius
-            })
-        end
-    end
-
-    -- Connect neighboring points.
-    --
-    -- Small overlaps prevent visible breaks.
-    -- Circular joints are limited to transitions
-    -- instead of every point.
-
-    local overlap = 0.45
-
-    for i = 1, #points do
-        local a = points[i]
-        local b = points[(i % #points) + 1]
-
-        local dx = b[1] - a[1]
-        local dy = b[2] - a[2]
-
-        local length = math.sqrt(dx * dx + dy * dy)
-
-        if length > 0.001 then
-            local ux = dx / length
-            local uy = dy / length
-
-            local x1 = a[1] - ux * overlap
-            local y1 = a[2] - uy * overlap
-
-            local x2 = b[1] + ux * overlap
-            local y2 = b[2] + uy * overlap
-
-            local segment = Create("Frame", {
-                AnchorPoint = Vector2.new(0.5, 0.5),
-
-                Position = UDim2.fromOffset(
-                    (x1 + x2) / 2,
-                    (y1 + y2) / 2
-                ),
-
-                Size = UDim2.fromOffset(
-                    length + overlap * 2,
-                    strokeWidth
-                ),
-
-                Rotation = math.deg(
-                    math.atan2(dy, dx)
-                ),
-
-                BackgroundColor3 = color,
-                BorderSizePixel = 0
-            }, parent)
-        end
-    end
-
-    -- Rounded tooth tips.
-    --
-    -- These are positioned at the center of
-    -- each tooth, keeping all six symmetrical.
-
-    for i = 0, teeth - 1 do
-        local angle =
-            -math.pi / 2
-            + i * math.pi * 2 / teeth
-
-        local x = cx + math.cos(angle) * outerRadius
-        local y = cy + math.sin(angle) * outerRadius
-
-        IconCircle(
-            parent,
-            x - strokeWidth / 2,
-            y - strokeWidth / 2,
-            strokeWidth,
-            color
-        )
-    end
-
-    -- Completely hollow center.
-    --
-    -- This is an outlined transparent Frame.
-    -- The middle shows the actual background.
-
-    local center = Create("Frame", {
-        Name = "HollowCenter",
-
-        AnchorPoint = Vector2.new(0.5, 0.5),
-
-        Position = UDim2.fromOffset(cx, cy),
-
-        Size = UDim2.fromOffset(43, 43),
-
-        BackgroundTransparency = 1,
-        BorderSizePixel = 0
-    }, parent)
-
-    Create("UICorner", {
-        CornerRadius = UDim.new(1, 0)
-    }, center)
-
-    Create("UIStroke", {
-        Color = color,
-        Thickness = 7,
-        ApplyStrokeMode = Enum.ApplyStrokeMode.Border
-    }, center)
-end
-
---==================================================
--- ICON REGISTRY
+-- ICON REGISTRY - SETTINGS ICON REMOVED
 --==================================================
 
 local IconDrawers = {
     commands = DrawCommands,
     players = DrawPlayers,
-    servers = DrawServers,
-    settings = DrawSettings
+    servers = DrawServers
 }
 
 local function DrawIcon(parent, kind, color)
@@ -1501,7 +1316,7 @@ Brand.Size = UDim2.fromOffset(135, 25)
 
 local Version = Label(
     Sidebar,
-    "universal hub v47",
+    "universal hub v48",
     11,
     C.muted
 )
@@ -1634,7 +1449,7 @@ Bind(
 )
 
 --==================================================
--- SIDEBAR
+-- SIDEBAR - FOUR TABS
 --==================================================
 
 local Navigation = {
@@ -1681,6 +1496,13 @@ for i, entry in ipairs(Navigation) do
     textLabel.Position = UDim2.fromOffset(52, -1)
     textLabel.Size = UDim2.new(1, -60, 1, 0)
 
+    -- V48: Center Settings text in its tab.
+    if name == "Settings" then
+        textLabel.Position = UDim2.fromOffset(0, -1)
+        textLabel.Size = UDim2.fromScale(1, 1)
+        textLabel.TextXAlignment = Enum.TextXAlignment.Center
+    end
+
     local indicator = Create("Frame", {
         AnchorPoint = Vector2.new(0, 0.5),
         Position = UDim2.new(1, -5, 0.5, 0),
@@ -1720,11 +1542,14 @@ local function UpdateNav()
             child:Destroy()
         end
 
-        DrawIcon(
-            data.icon,
-            data.kind,
-            selected and C.purple or C.muted
-        )
+        -- V48: Settings has no icon.
+        if name ~= "Settings" then
+            DrawIcon(
+                data.icon,
+                data.kind,
+                selected and C.purple or C.muted
+            )
+        end
     end
 end
 
@@ -1735,7 +1560,8 @@ local function UpdateHeadingIcon(name)
 
     local data = NavButtons[name]
 
-    if data then
+    -- V48: No Settings heading icon.
+    if data and name ~= "Settings" then
         DrawIcon(HeadingIcon, data.kind, C.purple)
     end
 end
@@ -2205,8 +2031,6 @@ Sections.Commands = function()
         "Character",
         Freeze
     )
-
-    -- V47: Sit has been completely removed.
 
     Action(
         "Unstuck",
@@ -3209,7 +3033,7 @@ Sections.Settings = function()
 
     local title = Label(
         card,
-        "V47 GUI Icons",
+        "V48 GUI Icons",
         14,
         C.text,
         true
@@ -3220,7 +3044,7 @@ Sections.Settings = function()
 
     local status = Label(
         card,
-        "Four native Roblox GUI icons",
+        "Three native Roblox GUI icons",
         12,
         C.green
     )
@@ -3230,7 +3054,7 @@ Sections.Settings = function()
 
     local description = Label(
         card,
-        "Rounded six-tooth gear · hollow center",
+        "Settings text centered · gear removed",
         11,
         C.faint
     )
@@ -3238,7 +3062,7 @@ Sections.Settings = function()
     description.Position = UDim2.fromOffset(14, 55)
     description.Size = UDim2.new(1, -28, 0, 17)
 
-    AddEntry(card, "v47 icon system", "All")
+    AddEntry(card, "v48 icon system", "All")
 end
 
 --==================================================
@@ -3268,6 +3092,13 @@ ShowSection = function(name)
         "search " .. name:lower() .. "..."
 
     Heading.Text = name:lower()
+
+    -- V48: Center heading when Settings is selected.
+    if name == "Settings" then
+        Heading.Position = UDim2.fromOffset(17, 15)
+    else
+        Heading.Position = UDim2.fromOffset(55, 15)
+    end
 
     ClearList()
 
@@ -3744,10 +3575,10 @@ _G.KHASTIFY_HUB_CLEANUP = function()
 end
 
 print("====================================")
-print("KHASTIFY'S UNIVERSAL HUB V47")
-print("REDESIGNED SIX-TOOTH GEAR")
-print("HOLLOW CENTER PRESERVED")
-print("SIT REMOVED")
+print("KHASTIFY'S UNIVERSAL HUB V48")
+print("SETTINGS GEAR REMOVED")
+print("SETTINGS TEXT CENTERED")
+print("COMMANDS / PLAYERS / SERVERS ICONS PRESERVED")
 print("FOUR SIDEBAR TABS")
 print("AUTO EXECUTE PRESERVED")
 print("HTTP 429 HANDLING PRESERVED")
