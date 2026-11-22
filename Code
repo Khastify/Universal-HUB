@@ -1,27 +1,29 @@
 --[[
-    KHASTIFY'S UNIVERSAL HUB V26
+    KHASTIFY'S UNIVERSAL HUB V27
 
-    NEW IN V26:
+    V27 CHANGES:
+    - Voice Chat: connected microphone and support arms
+    - Players: two complete upper-body silhouettes
     - Actions: hollow four-point diamond star
-    - Voice Chat: microphone with curved support arms
-    - Players: two recognizable person silhouettes
-    - Settings: improved outlined gear with real teeth
+    - Settings: connected eight-tooth gear outline
+    - Uniform stroke thickness on redesigned icons
+    - Current server now has a Rejoin Server button
 
     PRESERVED:
-    - Boxless >_ Commands icon
+    - Commands and Servers icons
     - 30x30 sidebar icons
-    - Purple selected tab text and icons
-    - Sidebar text offset: -1 pixel
-    - Public server browser
+    - Purple selected text and icons
+    - Sidebar text Y offset: -1
+    - Live public server browser
     - Current server pinned first
-    - Server search, refresh and load more
+    - Search, refresh, load more
     - Automatic player list updates
     - Animated dropdowns
-    - Custom hotkeys
-    - Delete/Backspace to unbind
-    - 11-stud invisibility system
+    - Custom keybinds
+    - 11-stud invisibility
 
-    K = Toggle menu
+    DEFAULT HOTKEYS:
+    K = Toggle hub
     Q = Dash
 ]]
 
@@ -118,7 +120,6 @@ if type(readfile) == "function" then
         for key, value in pairs(values) do
             if State[key] ~= nil
                 and type(value) == type(State[key]) then
-
                 State[key] = value
             end
         end
@@ -129,7 +130,6 @@ if type(readfile) == "function" then
             for name, key in pairs(saved.keybinds) do
                 if type(name) == "string"
                     and type(key) == "string" then
-
                     Keybinds[name] = key
                 end
             end
@@ -210,12 +210,12 @@ local function Stroke(obj, color, thickness)
     }, obj)
 end
 
-local function Label(parent, text, size, color, bold)
+local function Label(parent, value, size, color, bold)
     return Create("TextLabel", {
         BackgroundTransparency = 1,
         BorderSizePixel = 0,
 
-        Text = text,
+        Text = value,
         TextColor3 = color or C.text,
 
         Font = bold
@@ -249,7 +249,7 @@ local function Tween(obj, properties, duration)
 end
 
 --==================================================
--- ICON GEOMETRY
+-- ICON DRAWING ENGINE
 --==================================================
 
 local function Line(parent, x1, y1, x2, y2, color, thick)
@@ -347,65 +347,51 @@ local function OutlineRect(
     return obj
 end
 
-local function Arc(
-    parent,
-    cx,
-    cy,
-    radius,
-    startAngle,
-    endAngle,
-    color,
-    thick
-)
-    local segments = math.max(
-        16,
-        math.ceil(math.abs(endAngle - startAngle) / 4)
-    )
+-- V27:
+-- One shared stroke width for the four redesigned icons.
 
-    for i = 0, segments - 1 do
-        local a1 = math.rad(
-            startAngle
-            + (endAngle - startAngle) * i / segments
-        )
+local ICON_STROKE = 1.8
 
-        local a2 = math.rad(
-            startAngle
-            + (endAngle - startAngle) * (i + 1) / segments
-        )
+local function Path(parent, points, color, closed, thickness)
+    thickness = thickness or ICON_STROKE
+
+    if #points < 2 then
+        return
+    end
+
+    for i = 1, #points - 1 do
+        local a = points[i]
+        local b = points[i + 1]
 
         Line(
             parent,
-
-            cx + math.cos(a1) * radius,
-            cy + math.sin(a1) * radius,
-
-            cx + math.cos(a2) * radius,
-            cy + math.sin(a2) * radius,
-
+            a.X, a.Y,
+            b.X, b.Y,
             color,
-            thick
+            thickness
+        )
+    end
+
+    if closed then
+        local a = points[#points]
+        local b = points[1]
+
+        Line(
+            parent,
+            a.X, a.Y,
+            b.X, b.Y,
+            color,
+            thickness
         )
     end
 end
 
--- Draws a smooth cubic Bezier curve.
--- Used for the diamond star and people silhouettes.
+local function CurvePoints(p0, p1, p2, p3, segments)
+    segments = segments or 24
 
-local function Bezier(
-    parent,
-    p0,
-    p1,
-    p2,
-    p3,
-    color,
-    thick,
-    segments
-)
-    segments = segments or 14
+    local points = {}
 
-    local previous = p0
-
-    for i = 1, segments do
+    for i = 0, segments do
         local t = i / segments
         local u = 1 - t
 
@@ -415,22 +401,60 @@ local function Bezier(
             + p2 * (3 * u * t * t)
             + p3 * (t * t * t)
 
-        Line(
-            parent,
-            previous.X,
-            previous.Y,
-            point.X,
-            point.Y,
-            color,
-            thick
+        table.insert(points, point)
+    end
+
+    return points
+end
+
+local function Curve(
+    parent, p0, p1, p2, p3, color, thickness
+)
+    Path(
+        parent,
+        CurvePoints(p0, p1, p2, p3, 24),
+        color,
+        false,
+        thickness
+    )
+end
+
+local function ArcPoints(
+    cx, cy, rx, ry, startAngle, endAngle, segments
+)
+    segments = segments or 32
+
+    local points = {}
+
+    for i = 0, segments do
+        local a = math.rad(
+            startAngle
+            + (endAngle - startAngle) * i / segments
         )
 
-        previous = point
+        table.insert(
+            points,
+            Vector2.new(
+                cx + math.cos(a) * rx,
+                cy + math.sin(a) * ry
+            )
+        )
     end
+
+    return points
+end
+
+local function SmoothCircle(parent, cx, cy, radius, color)
+    Path(
+        parent,
+        ArcPoints(cx, cy, radius, radius, 0, 360, 48),
+        color,
+        true
+    )
 end
 
 --==================================================
--- V26 ICONS
+-- V27 ICONS
 --==================================================
 
 local function DrawIcon(parent, kind, color)
@@ -444,7 +468,7 @@ local function DrawIcon(parent, kind, color)
 
     if kind == "commands" then
 
-        -- Boxless >_ icon.
+        -- UNCHANGED FROM V26.
 
         Line(holder, 5, 8, 10.5, 13, color, 2.2)
         Line(holder, 10.5, 13, 5, 18, color, 2.2)
@@ -458,194 +482,194 @@ local function DrawIcon(parent, kind, color)
 
     elseif kind == "voice" then
 
-        -- V26 VOICE CHAT
-        -- Rounded microphone body.
-        -- Curved arms on BOTH sides.
-        -- Center stem and horizontal base.
+        --==================================================
+        -- V27 VOICE CHAT
+        --==================================================
 
-        OutlineRect(
-            holder,
-            9.5, 2.5,
-            7, 14,
-            color,
-            4,
-            1.9
-        )
+        -- Rounded microphone capsule.
+        -- One continuous closed outline.
 
-        -- Left support arm.
-        Line(
-            holder,
-            5.5, 10,
-            5.5, 13,
-            color, 1.9
-        )
+        local mic = {}
 
-        -- Right support arm.
-        Line(
-            holder,
-            20.5, 10,
-            20.5, 13,
-            color, 1.9
-        )
+        local function Append(points)
+            for _, point in ipairs(points) do
+                table.insert(mic, point)
+            end
+        end
 
-        -- Smooth U-shaped support.
-        Arc(
-            holder,
+        -- Top semicircle.
+        Append(ArcPoints(
+            13, 6.5,
+            3.5, 3.5,
+            180, 360, 18
+        ))
+
+        -- Right side.
+        table.insert(mic, Vector2.new(16.5, 13))
+
+        -- Bottom semicircle.
+        Append(ArcPoints(
             13, 13,
-            7.5,
-            0, 180,
-            color, 1.9
+            3.5, 3.5,
+            0, 180, 18
+        ))
+
+        -- Left side.
+        table.insert(mic, Vector2.new(9.5, 6.5))
+
+        Path(holder, mic, color, true)
+
+        -- Microphone arms:
+        -- Both sides connect into the same U-shaped curve.
+
+        local support = ArcPoints(
+            13, 13,
+            7.5, 7.5,
+            0, 180, 32
         )
 
-        -- Vertical stem.
-        Line(
-            holder,
-            13, 20.5,
-            13, 23,
-            color, 1.9
+        table.insert(
+            support,
+            1,
+            Vector2.new(20.5, 10)
         )
 
-        -- Base.
-        Line(
-            holder,
-            9, 23,
-            17, 23,
-            color, 1.9
+        table.insert(
+            support,
+            Vector2.new(5.5, 10)
         )
+
+        Path(holder, support, color, false)
+
+        -- Center stem and base.
+        Line(holder, 13, 20.5, 13, 23, color, ICON_STROKE)
+        Line(holder, 9, 23, 17, 23, color, ICON_STROKE)
 
     elseif kind == "players" then
 
-        -- V26 PLAYERS
-        -- Two complete upper-body silhouettes.
-        -- Back person on the right.
-        -- Front person on the left.
+        --==================================================
+        -- V27 PLAYERS
+        --==================================================
 
-        -- Back head.
-        Circle(
-            holder,
-            18.5, 8.5,
-            3,
-            color, 1.8
-        )
+        -- Rear person's head.
+        SmoothCircle(holder, 18.5, 8, 3, color)
 
-        -- Back shoulders / upper body.
-        Bezier(
+        -- Rear person's shoulder and body.
+        Curve(
             holder,
-            Vector2.new(15.5, 15),
-            Vector2.new(19, 13.8),
-            Vector2.new(23, 16.5),
-            Vector2.new(23, 21),
-            color, 1.9
+
+            Vector2.new(16.8, 14.2),
+            Vector2.new(20.5, 13.2),
+            Vector2.new(23, 16),
+            Vector2.new(23, 20),
+
+            color
         )
 
         Line(
             holder,
-            23, 21,
-            18.5, 21,
-            color, 1.9
+            23, 20,
+            18.5, 20,
+            color,
+            ICON_STROKE
         )
 
-        -- Front head.
-        Circle(
-            holder,
-            9.5, 8.5,
-            3.7,
-            color, 2
+        -- Front person's head.
+        SmoothCircle(holder, 9.5, 8.5, 3.7, color)
+
+        -- Front person's upper body.
+        -- Left shoulder, torso, bottom and right shoulder.
+
+        local body = {}
+
+        local leftShoulder = CurvePoints(
+            Vector2.new(8, 15),
+            Vector2.new(4, 15),
+            Vector2.new(2.5, 17.5),
+            Vector2.new(2.5, 21),
+            18
         )
 
-        -- Left shoulder and torso.
-        Bezier(
-            holder,
-            Vector2.new(8, 15.1),
-            Vector2.new(3, 15),
-            Vector2.new(2.5, 19),
-            Vector2.new(2.5, 22),
-            color, 2.1
+        for _, point in ipairs(leftShoulder) do
+            table.insert(body, point)
+        end
+
+        table.insert(body, Vector2.new(16.5, 21))
+
+        local rightShoulder = CurvePoints(
+            Vector2.new(16.5, 21),
+            Vector2.new(16.5, 17.5),
+            Vector2.new(14.5, 15),
+            Vector2.new(11, 15),
+            18
         )
 
-        -- Bottom of front torso.
-        Line(
-            holder,
-            2.5, 22,
-            16.5, 22,
-            color, 2.1
-        )
+        for _, point in ipairs(rightShoulder) do
+            table.insert(body, point)
+        end
 
-        -- Right shoulder and torso.
-        Bezier(
-            holder,
-            Vector2.new(16.5, 22),
-            Vector2.new(16.5, 18),
-            Vector2.new(14, 15),
-            Vector2.new(11, 15.1),
-            color, 2.1
-        )
+        Path(holder, body, color, false)
 
     elseif kind == "actions" then
 
-        -- V26 ACTIONS
+        --==================================================
+        -- V27 ACTIONS
+        --==================================================
+
         -- Hollow four-point diamond star.
-        --
-        -- Matches the supplied reference:
-        -- Sharp outward points,
-        -- inward-curving sides,
-        -- rounded stroke ends,
-        -- no extra sparkles or wand.
+        -- One connected closed path.
+        -- No separate dots or disconnected tips.
 
         local top = Vector2.new(13, 2.5)
         local right = Vector2.new(23.5, 13)
         local bottom = Vector2.new(13, 23.5)
         local left = Vector2.new(2.5, 13)
 
-        -- Top to right.
-        Bezier(
-            holder,
+        local star = {}
+
+        local function AddCurve(p0, p1, p2, p3)
+            local points = CurvePoints(
+                p0, p1, p2, p3, 24
+            )
+
+            for _, point in ipairs(points) do
+                table.insert(star, point)
+            end
+        end
+
+        AddCurve(
             top,
-            Vector2.new(16.3, 9.7),
-            Vector2.new(16.3, 9.7),
+            Vector2.new(16, 10),
+            Vector2.new(16, 10),
+            right
+        )
+
+        AddCurve(
             right,
-            color, 2.8, 18
+            Vector2.new(16, 16),
+            Vector2.new(16, 16),
+            bottom
         )
 
-        -- Right to bottom.
-        Bezier(
-            holder,
-            right,
-            Vector2.new(16.3, 16.3),
-            Vector2.new(16.3, 16.3),
+        AddCurve(
             bottom,
-            color, 2.8, 18
+            Vector2.new(10, 16),
+            Vector2.new(10, 16),
+            left
         )
 
-        -- Bottom to left.
-        Bezier(
-            holder,
-            bottom,
-            Vector2.new(9.7, 16.3),
-            Vector2.new(9.7, 16.3),
+        AddCurve(
             left,
-            color, 2.8, 18
+            Vector2.new(10, 10),
+            Vector2.new(10, 10),
+            top
         )
 
-        -- Left to top.
-        Bezier(
-            holder,
-            left,
-            Vector2.new(9.7, 9.7),
-            Vector2.new(9.7, 9.7),
-            top,
-            color, 2.8, 18
-        )
-
-        -- Rounded outer tips.
-        Dot(holder, 13, 2.5, 1.4, color)
-        Dot(holder, 23.5, 13, 1.4, color)
-        Dot(holder, 13, 23.5, 1.4, color)
-        Dot(holder, 2.5, 13, 1.4, color)
+        Path(holder, star, color, true)
 
     elseif kind == "servers" then
 
-        -- Original server icon preserved.
+        -- UNCHANGED FROM V26.
 
         local function S(v)
             return v * 1.3
@@ -684,50 +708,48 @@ local function DrawIcon(parent, kind, color)
 
     elseif kind == "settings" then
 
-        -- V26 SETTINGS
-        -- True outlined gear silhouette.
+        --==================================================
+        -- V27 SETTINGS
+        --==================================================
+
+        -- Connected gear outline.
         -- Eight evenly spaced teeth.
-        -- Circular hole in the middle.
-        --
-        -- Unlike V25, the center is not filled
-        -- with the sidebar background color.
+        -- Same stroke width for every edge.
 
         local cx = 13
         local cy = 13
 
-        local points = {}
-
-        -- Each tooth has four contour points.
-        -- The alternating radii form a gear outline.
+        local outline = {}
 
         for i = 0, 7 do
-            local centerAngle = -math.pi / 2
-                + i * math.pi / 4
+            local center = math.rad(-90 + i * 45)
 
-            local offsets = {
-                -0.39,
-                -0.25,
-                -0.17,
-                0.17,
-                0.25,
-                0.39
+            local angles = {
+                -22.5,
+                -15,
+                -15,
+                15,
+                15,
+                22.5
             }
 
             local radii = {
-                8.1,
-                8.1,
-                10.8,
-                10.8,
-                8.1,
-                8.1
+                8.3,
+                8.3,
+                10.5,
+                10.5,
+                8.3,
+                8.3
             }
 
-            for j = 1, #offsets do
-                local angle = centerAngle + offsets[j]
+            for j = 1, #angles do
+                local angle =
+                    center + math.rad(angles[j])
+
                 local radius = radii[j]
 
                 table.insert(
-                    points,
+                    outline,
                     Vector2.new(
                         cx + math.cos(angle) * radius,
                         cy + math.sin(angle) * radius
@@ -736,25 +758,10 @@ local function DrawIcon(parent, kind, color)
             end
         end
 
-        for i = 1, #points do
-            local a = points[i]
-            local b = points[i % #points + 1]
+        Path(holder, outline, color, true)
 
-            Line(
-                holder,
-                a.X, a.Y,
-                b.X, b.Y,
-                color, 1.9
-            )
-        end
-
-        -- Hollow center.
-        Circle(
-            holder,
-            cx, cy,
-            3.6,
-            color, 2
-        )
+        -- Center hole.
+        SmoothCircle(holder, cx, cy, 3.4, color)
     end
 
     return holder
@@ -790,13 +797,7 @@ local function DrawSearchIcon(parent)
     }, parent)
 
     Circle(holder, 7, 7, 6, C.muted, 1.8)
-
-    Line(
-        holder,
-        12, 12,
-        18, 18,
-        C.muted, 2
-    )
+    Line(holder, 12, 12, 18, 18, C.muted, 2)
 
     return holder
 end
@@ -836,29 +837,20 @@ local FlyVelocity
 local FlyGyro
 
 local function StopFly()
-    if FlyVelocity then
-        FlyVelocity:Destroy()
-    end
-
-    if FlyGyro then
-        FlyGyro:Destroy()
-    end
+    if FlyVelocity then FlyVelocity:Destroy() end
+    if FlyGyro then FlyGyro:Destroy() end
 
     FlyVelocity = nil
     FlyGyro = nil
 
     local h = Hum()
-
-    if h then
-        h.PlatformStand = false
-    end
+    if h then h.PlatformStand = false end
 end
 
 local function StartFly()
     StopFly()
 
-    local r = Root()
-    local h = Hum()
+    local r, h = Root(), Hum()
 
     if not r or not h then return end
 
@@ -879,14 +871,11 @@ local function Platform(name, size)
     return Create("Part", {
         Name = name,
         Size = size,
-
         Anchored = true,
         Transparency = 1,
-
         CanCollide = true,
         CanTouch = false,
         CanQuery = false,
-
         CastShadow = false
     }, workspace)
 end
@@ -895,9 +884,7 @@ local AirPlatform
 local AirHeight
 
 local function StopAirWalk()
-    if AirPlatform then
-        AirPlatform:Destroy()
-    end
+    if AirPlatform then AirPlatform:Destroy() end
 
     AirPlatform = nil
     AirHeight = nil
@@ -924,12 +911,7 @@ local function Dash()
     if not r or not camera then return end
 
     local direction = camera.CFrame.LookVector
-
-    direction = Vector3.new(
-        direction.X,
-        0,
-        direction.Z
-    )
+    direction = Vector3.new(direction.X, 0, direction.Z)
 
     if direction.Magnitude < 0.01 then return end
 
@@ -971,13 +953,8 @@ local function RestoreTransparency()
 end
 
 local function DestroyInvisible()
-    if VisualAvatar then
-        VisualAvatar:Destroy()
-    end
-
-    if InvisibleFloor then
-        InvisibleFloor:Destroy()
-    end
+    if VisualAvatar then VisualAvatar:Destroy() end
+    if InvisibleFloor then InvisibleFloor:Destroy() end
 
     VisualAvatar = nil
     InvisibleFloor = nil
@@ -1113,26 +1090,14 @@ end
 
 local function GroundAt(x, z, referenceY)
     local params = RaycastParams.new()
-
     params.FilterType = Enum.RaycastFilterType.Exclude
 
     local excluded = {}
 
-    if Char() then
-        table.insert(excluded, Char())
-    end
-
-    if VisualAvatar then
-        table.insert(excluded, VisualAvatar)
-    end
-
-    if InvisibleFloor then
-        table.insert(excluded, InvisibleFloor)
-    end
-
-    if AirPlatform then
-        table.insert(excluded, AirPlatform)
-    end
+    if Char() then table.insert(excluded, Char()) end
+    if VisualAvatar then table.insert(excluded, VisualAvatar) end
+    if InvisibleFloor then table.insert(excluded, InvisibleFloor) end
+    if AirPlatform then table.insert(excluded, AirPlatform) end
 
     params.FilterDescendantsInstances = excluded
 
@@ -1150,8 +1115,7 @@ local function GroundAt(x, z, referenceY)
 end
 
 local function SetBodyY(y)
-    local c = Char()
-    local r = Root()
+    local c, r = Char(), Root()
 
     if not c or not r then return end
 
@@ -1207,9 +1171,7 @@ local function MirrorAvatar()
 end
 
 local function SetInvisible(enabled)
-    local c = Char()
-    local r = Root()
-    local h = Hum()
+    local c, r, h = Char(), Root(), Hum()
     local camera = workspace.CurrentCamera
 
     if not enabled then
@@ -1439,10 +1401,7 @@ end
 
 local function Sit()
     local h = Hum()
-
-    if h then
-        h.Sit = true
-    end
+    if h then h.Sit = true end
 end
 
 local function Unstuck()
@@ -1458,10 +1417,7 @@ end
 
 local function Respawn()
     local h = Hum()
-
-    if h then
-        h.Health = 0
-    end
+    if h then h.Health = 0 end
 end
 
 local function SelfFling()
@@ -1580,7 +1536,7 @@ Brand.Size = UDim2.fromOffset(135, 25)
 
 local Version = Label(
     Sidebar,
-    "universal hub v26",
+    "universal hub v27",
     11,
     C.muted
 )
@@ -1787,8 +1743,6 @@ for i, entry in ipairs(Navigation) do
         BackgroundTransparency = 1
     }, button)
 
-    -- Text remains at -1 pixel, as requested.
-
     local nameLabel = Create("TextLabel", {
         Position = UDim2.fromOffset(52, -1),
         Size = UDim2.new(1, -60, 1, 0),
@@ -1918,9 +1872,7 @@ local function UpdateKeybindLabels()
 end
 
 local function SetKeybind(name, key)
-    if key == State.menuKey then
-        return false
-    end
+    if key == State.menuKey then return false end
 
     for otherName, otherKey in pairs(Keybinds) do
         if otherKey == key then
@@ -2079,11 +2031,7 @@ local function MakeCard(height)
 end
 
 local function Feature(
-    name,
-    category,
-    description,
-    callback,
-    allowKeybind
+    name, category, description, callback, allowKeybind
 )
     local card = MakeCard(60)
 
@@ -2118,12 +2066,7 @@ local function Feature(
     sub.Position = UDim2.fromOffset(15, 33)
     sub.Size = UDim2.new(1, -112, 0, 18)
 
-    local arrow = Label(
-        card,
-        "›",
-        24,
-        C.muted
-    )
+    local arrow = Label(card, "›", 24, C.muted)
 
     arrow.Position = UDim2.new(1, -29, 0, 12)
     arrow.Size = UDim2.fromOffset(19, 34)
@@ -2226,13 +2169,7 @@ local function Action(name, category, description, callback)
     )
 end
 
-local function Number(
-    name,
-    key,
-    category,
-    maximum,
-    callback
-)
+local function Number(name, key, category, maximum, callback)
     local card = MakeCard(71)
 
     local title = Label(
@@ -2371,11 +2308,7 @@ Sections.Commands = function()
     SectionTitle("Movement")
 
     Toggle("Fly", "fly", "Movement", function(on)
-        if on then
-            StartFly()
-        else
-            StopFly()
-        end
+        if on then StartFly() else StopFly() end
     end)
 
     Number("Fly Speed", "flySpeed", "Movement", 500)
@@ -2392,43 +2325,22 @@ Sections.Commands = function()
     Toggle("Click TP", "clickTP", "Movement")
 
     Toggle("Air Walk", "airWalk", "Movement", function(on)
-        if on then
-            StartAirWalk()
-        else
-            StopAirWalk()
-        end
+        if on then StartAirWalk() else StopAirWalk() end
     end)
 
-    Number(
-        "WalkSpeed",
-        "speed",
-        "Movement",
-        500,
+    Number("WalkSpeed", "speed", "Movement", 500, function(v)
+        local h = Hum()
+        if h then h.WalkSpeed = v end
+    end)
 
-        function(v)
-            local h = Hum()
+    Number("JumpPower", "jump", "Movement", 500, function(v)
+        local h = Hum()
 
-            if h then
-                h.WalkSpeed = v
-            end
+        if h then
+            h.UseJumpPower = true
+            h.JumpPower = v
         end
-    )
-
-    Number(
-        "JumpPower",
-        "jump",
-        "Movement",
-        500,
-
-        function(v)
-            local h = Hum()
-
-            if h then
-                h.UseJumpPower = true
-                h.JumpPower = v
-            end
-        end
-    )
+    end)
 
     Number("Dash Power", "dashPower", "Movement", 500)
 
@@ -2466,12 +2378,7 @@ local function DropdownArrow(parent, y)
         Rotation = 0
     }, parent)
 
-    local symbol = Label(
-        holder,
-        "›",
-        24,
-        C.muted
-    )
+    local symbol = Label(holder, "›", 24, C.muted)
 
     symbol.Size = UDim2.fromScale(1, 1)
     symbol.TextXAlignment = Enum.TextXAlignment.Center
@@ -2480,11 +2387,7 @@ local function DropdownArrow(parent, y)
 end
 
 local function DropdownButton(
-    parent,
-    text,
-    position,
-    size,
-    callback
+    parent, value, position, size, callback
 )
     local button = Create("TextButton", {
         Position = position,
@@ -2493,7 +2396,7 @@ local function DropdownButton(
         BackgroundColor3 = C.selected,
         BorderSizePixel = 0,
 
-        Text = text,
+        Text = value,
         TextColor3 = C.text,
 
         Font = Enum.Font.GothamBold,
@@ -2574,9 +2477,7 @@ local function TeleportToPlayer(player)
     local target = player.Character
         and player.Character:FindFirstChild("HumanoidRootPart")
 
-    if not target or not Root() then
-        return
-    end
+    if not target or not Root() then return end
 
     if State.invisible then
         State.invisible = false
@@ -2615,7 +2516,6 @@ end
 local function UpdatePlayerCount()
     if not PlayerCountLabel
         or not PlayerCountLabel.Parent then
-
         return
     end
 
@@ -2659,9 +2559,7 @@ local function UpdatePlayerOrder()
 end
 
 local function MakePlayerCard(player, generation)
-    if PlayerCards[player.UserId] then
-        return
-    end
+    if PlayerCards[player.UserId] then return end
 
     local card = MakeCard(63)
 
@@ -2823,9 +2721,7 @@ end
 local function RemovePlayerCard(player)
     local data = PlayerCards[player.UserId]
 
-    if not data then
-        return
-    end
+    if not data then return end
 
     DisconnectPlayerCard(player.UserId)
     RemoveEntry(data.frame)
@@ -2863,12 +2759,7 @@ Sections.Players = function()
 
     ClearPlayerCards()
 
-    local info = Label(
-        List,
-        "",
-        12,
-        C.muted
-    )
+    local info = Label(List, "", 12, C.muted)
 
     info.Size = UDim2.new(1, 0, 0, 27)
     info.LayoutOrder = 0
@@ -2885,9 +2776,7 @@ Sections.Players = function()
 end
 
 Bind(Players.PlayerAdded, function(player)
-    if not Alive or player == LP then
-        return
-    end
+    if not Alive or player == LP then return end
 
     if Active == "Players" then
         MakePlayerCard(player, PlayerListGeneration)
@@ -2897,9 +2786,7 @@ Bind(Players.PlayerAdded, function(player)
 end)
 
 Bind(Players.PlayerRemoving, function(player)
-    if not Alive or player == LP then
-        return
-    end
+    if not Alive or player == LP then return end
 
     if Active == "Players" then
         RemovePlayerCard(player)
@@ -3031,6 +2918,20 @@ local function ServerPopulation(server)
         .. " Players"
 end
 
+--==================================================
+-- V27 SERVER REJOIN / JOIN
+--==================================================
+
+local function JoinServer(serverId)
+    return pcall(function()
+        TeleportService:TeleportToPlaceInstance(
+            game.PlaceId,
+            serverId,
+            LP
+        )
+    end)
+end
+
 local function ServerCard(server, index, current)
     local id = server.id
 
@@ -3115,21 +3016,21 @@ local function ServerCard(server, index, current)
     idLabel.Position = UDim2.fromOffset(2, 0)
     idLabel.Size = UDim2.new(1, -4, 0, 22)
 
+    -- V27:
+    -- Current server now says Rejoin Server.
+
+    local defaultButtonText =
+        current and "Rejoin Server" or "Join Server"
+
     local join = Create("TextButton", {
         Position = UDim2.fromOffset(0, 33),
         Size = UDim2.new(1, 0, 0, 36),
 
-        BackgroundColor3 =
-            current and C.card or C.selected,
-
+        BackgroundColor3 = C.selected,
         BorderSizePixel = 0,
 
-        Text = current
-            and "You're Here"
-            or "Join Server",
-
-        TextColor3 =
-            current and C.muted or C.text,
+        Text = defaultButtonText,
+        TextColor3 = C.text,
 
         Font = Enum.Font.GothamBold,
         TextSize = 13,
@@ -3139,34 +3040,29 @@ local function ServerCard(server, index, current)
 
     Corner(join, 7)
 
-    if not current then
-        Bind(join.MouseButton1Click, function()
-            join.Text = "Joining..."
+    -- Works for BOTH current and other servers.
 
-            local ok, err = pcall(function()
-                TeleportService:TeleportToPlaceInstance(
-                    game.PlaceId,
-                    id,
-                    LP
-                )
+    Bind(join.MouseButton1Click, function()
+        join.Text = current and "Rejoining..." or "Joining..."
+
+        local ok, err = JoinServer(
+            current and game.JobId or id
+        )
+
+        if not ok then
+            join.Text = current
+                and "Rejoin Failed"
+                or "Join Failed"
+
+            warn("[KHASTIFY] Teleport failed:", err)
+
+            task.delay(2, function()
+                if join.Parent then
+                    join.Text = defaultButtonText
+                end
             end)
-
-            if not ok then
-                join.Text = "Join Failed"
-
-                warn(
-                    "[KHASTIFY] Join failed:",
-                    err
-                )
-
-                task.delay(2, function()
-                    if join.Parent then
-                        join.Text = "Join Server"
-                    end
-                end)
-            end
-        end)
-    end
+        end
+    end)
 
     local function SetExpanded(open, instant)
         local height = open and 166 or 67
@@ -3237,11 +3133,11 @@ local function ServerCard(server, index, current)
     return ServerBrowser.cards[id]
 end
 
-local function UpdateServerStatus(text)
+local function UpdateServerStatus(value)
     if ServerBrowser.status
         and ServerBrowser.status.Parent then
 
-        ServerBrowser.status.Text = text
+        ServerBrowser.status.Text = value
     end
 end
 
@@ -3261,9 +3157,7 @@ end
 local LoadServerPage
 
 LoadServerPage = function(reset)
-    if ServerBrowser.loading then
-        return
-    end
+    if ServerBrowser.loading then return end
 
     if reset then
         ServerBrowser.generation += 1
@@ -3417,9 +3311,7 @@ Sections.Servers = function()
     }, refreshCard)
 
     Bind(refresh.MouseButton1Click, function()
-        if ServerBrowser.loading then
-            return
-        end
+        if ServerBrowser.loading then return end
 
         ServerBrowser.expandedId = nil
         LoadServerPage(true)
@@ -4054,12 +3946,11 @@ _G.KHASTIFY_HUB_CLEANUP = function()
 end
 
 print("====================================")
-print("KHASTIFY'S UNIVERSAL HUB V26")
-print("NEW FOUR-POINT DIAMOND STAR ICON")
-print("VOICE CHAT MICROPHONE ARMS RESTORED")
-print("TWO-PERSON PLAYERS ICON")
-print("REDESIGNED OUTLINED SETTINGS GEAR")
+print("KHASTIFY'S UNIVERSAL HUB V27")
+print("UNIFORM-STROKE SIDEBAR ICONS")
+print("VOICE CHAT / PLAYERS / ACTIONS / SETTINGS")
+print("CURRENT SERVER REJOIN RESTORED")
+print("COMMANDS AND SERVERS ICONS UNCHANGED")
 print("PUBLIC SERVER BROWSER PRESERVED")
-print("AUTOMATIC PLAYER LIST UPDATES")
 print("Press " .. State.menuKey .. " to open.")
 print("====================================")
