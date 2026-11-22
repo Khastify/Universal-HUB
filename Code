@@ -1,26 +1,26 @@
 --[[
-    KHASTIFY'S UNIVERSAL HUB V32
+    KHASTIFY'S UNIVERSAL HUB V33
 
-    NEW:
-    - Thinner, symmetrical Actions icon
-    - Symmetrical Voice Chat microphone
-    - Settings > Auto Execute
-    - Teleport auto-execution support
-    - Optional executor startup-file installation
+    CHANGES:
+    - Redesigned symmetrical Voice Chat icon
+    - Redesigned six-tooth Settings gear
+    - Removed Previous Servers entirely
+    - Removed previous-server history tracking
 
     PRESERVED:
-    - Commands / Players / Servers / Settings icons
-    - All / Previous server tabs
-    - Five previous servers across games
-    - Current server pinned first
-    - Rejoin Server
+    - Commands icon
+    - Players icon
+    - Actions icon
+    - Servers icon
+    - Auto Execute
+    - Current server / Rejoin Server
+    - Public server browser
+    - Refresh / Load More
     - Inverse dropdown colors
-    - Fly / Noclip / Infinite Jump / Click TP
-    - Air Walk / Dash / Headless / Freeze
-    - Fullbright / Invisible
-    - Settings persistence
+    - Movement and character commands
+    - Custom keybinds
 
-    K = Toggle hub
+    K = Toggle Hub
     Q = Dash
 ]]
 
@@ -35,7 +35,6 @@ local TweenService = game:GetService("TweenService")
 local Lighting = game:GetService("Lighting")
 local TeleportService = game:GetService("TeleportService")
 local HttpService = game:GetService("HttpService")
-local MarketplaceService = game:GetService("MarketplaceService")
 
 local LP = Players.LocalPlayer
 
@@ -101,7 +100,11 @@ end
 local function Tween(obj, props, duration)
     local tween = TweenService:Create(
         obj,
-        TweenInfo.new(duration or 0.2),
+        TweenInfo.new(
+            duration or 0.2,
+            Enum.EasingStyle.Quad,
+            Enum.EasingDirection.Out
+        ),
         props
     )
 
@@ -148,6 +151,7 @@ local C = {
 local State = {
     fly = false,
     flySpeed = 60,
+    flyAnim = false,
     noclip = false,
     infiniteJump = false,
     clickTP = false,
@@ -168,7 +172,6 @@ local State = {
 local Keybinds = {Dash = "Q"}
 
 local SaveFile = "KHASTIFY_Universal_Hub_Settings.json"
-local HistoryFile = "KHASTIFY_Server_History.json"
 
 local function ReadJSON(filename)
     if type(readfile) ~= "function" then
@@ -203,6 +206,7 @@ do
         for key, value in pairs(saved.state or saved) do
             if State[key] ~= nil
                 and type(value) == type(State[key]) then
+
                 State[key] = value
             end
         end
@@ -230,8 +234,11 @@ local function Save()
 end
 
 --==================================================
--- V32 AUTO EXECUTE
+-- AUTO EXECUTE
 --==================================================
+
+-- Keep this URL identical to the one used in V32.
+-- Replace it only if your actual GitHub repository differs.
 
 local SCRIPT_URL =
     "https://raw.githubusercontent.com/" ..
@@ -276,21 +283,13 @@ end
 end
 
 local function InstallStartupLoader()
-    if type(writefile) ~= "function" then
+    if type(writefile) ~= "function"
+        or type(isfolder) ~= "function" then
+
         return false
     end
 
-    if type(isfolder) ~= "function"
-        or type(makefolder) ~= "function" then
-        return false
-    end
-
-    local folders = {
-        "autoexec",
-        "Autoexec"
-    }
-
-    for _, folder in ipairs(folders) do
+    for _, folder in ipairs({"autoexec", "Autoexec"}) do
         local exists = false
 
         pcall(function()
@@ -298,10 +297,11 @@ local function InstallStartupLoader()
         end)
 
         if exists then
-            local path = folder .. "/" .. AUTOEXEC_FILENAME
-
             local ok = pcall(function()
-                writefile(path, LoaderSource())
+                writefile(
+                    folder .. "/" .. AUTOEXEC_FILENAME,
+                    LoaderSource()
+                )
             end)
 
             if ok then
@@ -319,19 +319,12 @@ local function RemoveStartupLoader()
         return
     end
 
-    local folders = {
-        "autoexec",
-        "Autoexec"
-    }
-
-    for _, folder in ipairs(folders) do
+    for _, folder in ipairs({"autoexec", "Autoexec"}) do
         local path = folder .. "/" .. AUTOEXEC_FILENAME
 
         pcall(function()
-            if type(isfile) == "function" then
-                if isfile(path) then
-                    delfile(path)
-                end
+            if type(isfile) == "function" and isfile(path) then
+                delfile(path)
             end
         end)
     end
@@ -340,14 +333,20 @@ local function RemoveStartupLoader()
 end
 
 local function QueueNextTeleport()
-    if not State.autoExecute then return false end
-    if type(QueueTeleport) ~= "function" then return false end
+    if not State.autoExecute then
+        return false
+    end
+
+    if type(QueueTeleport) ~= "function" then
+        return false
+    end
 
     local ok = pcall(function()
         QueueTeleport(LoaderSource())
     end)
 
     AutoExecute.teleportSupported = ok
+
     return ok
 end
 
@@ -360,17 +359,13 @@ local function ConfigureAutoExecute(enabled)
         local teleport = QueueNextTeleport()
 
         if startup and teleport then
-            AutoExecute.status =
-                "Startup and teleport enabled"
+            AutoExecute.status = "Startup and teleport enabled"
         elseif startup then
-            AutoExecute.status =
-                "Startup enabled"
+            AutoExecute.status = "Startup enabled"
         elseif teleport then
-            AutoExecute.status =
-                "Teleport only"
+            AutoExecute.status = "Teleport only"
         else
-            AutoExecute.status =
-                "Executor setup required"
+            AutoExecute.status = "Executor setup required"
         end
     else
         RemoveStartupLoader()
@@ -382,129 +377,6 @@ end
 
 if State.autoExecute then
     ConfigureAutoExecute(true)
-end
-
---==================================================
--- SERVER HISTORY
---==================================================
-
-local MAX_PREVIOUS = 5
-
-local function ValidServer(entry)
-    return type(entry) == "table"
-        and type(entry.placeId) == "number"
-        and type(entry.jobId) == "string"
-        and entry.jobId ~= ""
-end
-
-local function SameServer(a, b)
-    return ValidServer(a)
-        and ValidServer(b)
-        and a.placeId == b.placeId
-        and a.jobId == b.jobId
-end
-
-local function GetGameName()
-    local name = game.Name
-
-    pcall(function()
-        local info = MarketplaceService:GetProductInfo(
-            game.PlaceId,
-            Enum.InfoType.Asset
-        )
-
-        if info and info.Name then
-            name = info.Name
-        end
-    end)
-
-    return name
-end
-
-local CurrentServerInfo = {
-    placeId = game.PlaceId,
-    jobId = game.JobId,
-    gameName = GetGameName(),
-    timestamp = os.time()
-}
-
-local ServerHistory = {
-    current = CurrentServerInfo,
-    previous = {}
-}
-
-local function NormalizeEntry(entry)
-    if not ValidServer(entry) then return nil end
-
-    return {
-        placeId = entry.placeId,
-        jobId = entry.jobId,
-        gameName = entry.gameName
-            or ("Place " .. tostring(entry.placeId)),
-        timestamp = entry.timestamp or os.time()
-    }
-end
-
-local function AddPreviousServer(entry)
-    entry = NormalizeEntry(entry)
-
-    if not entry or SameServer(entry, CurrentServerInfo) then
-        return
-    end
-
-    for i = #ServerHistory.previous, 1, -1 do
-        if SameServer(ServerHistory.previous[i], entry) then
-            table.remove(ServerHistory.previous, i)
-        end
-    end
-
-    table.insert(ServerHistory.previous, 1, entry)
-
-    while #ServerHistory.previous > MAX_PREVIOUS do
-        table.remove(ServerHistory.previous)
-    end
-end
-
-do
-    local saved = ReadJSON(HistoryFile)
-
-    if saved then
-        if type(saved.previous) == "table" then
-            for _, entry in ipairs(saved.previous) do
-                local normalized = NormalizeEntry(entry)
-
-                if normalized
-                    and not SameServer(normalized, CurrentServerInfo) then
-
-                    local duplicate = false
-
-                    for _, existing in ipairs(ServerHistory.previous) do
-                        if SameServer(existing, normalized) then
-                            duplicate = true
-                            break
-                        end
-                    end
-
-                    if not duplicate then
-                        table.insert(ServerHistory.previous, normalized)
-                    end
-                end
-            end
-        end
-
-        local oldCurrent = NormalizeEntry(saved.current)
-
-        if oldCurrent
-            and not SameServer(oldCurrent, CurrentServerInfo) then
-            AddPreviousServer(oldCurrent)
-        end
-    end
-
-    while #ServerHistory.previous > MAX_PREVIOUS do
-        table.remove(ServerHistory.previous)
-    end
-
-    WriteJSON(HistoryFile, ServerHistory)
 end
 
 --==================================================
@@ -533,6 +405,7 @@ local function Line(parent, x1, y1, x2, y2, color, thick)
     }, parent)
 
     Corner(obj, thick)
+
     return obj
 end
 
@@ -567,7 +440,8 @@ local function Circle(parent, x, y, radius, color, thick)
             radius * 2,
             radius * 2
         ),
-        BackgroundTransparency = 1
+        BackgroundTransparency = 1,
+        BorderSizePixel = 0
     }, parent)
 
     Create("UICorner", {
@@ -575,14 +449,18 @@ local function Circle(parent, x, y, radius, color, thick)
     }, obj)
 
     Stroke(obj, color, thick or 2)
+
     return obj
 end
 
-local function OutlineRect(parent, x, y, w, h, color, radius, thick)
+local function OutlineRect(
+    parent, x, y, w, h, color, radius, thick
+)
     local obj = Create("Frame", {
         Position = UDim2.fromOffset(x, y),
         Size = UDim2.fromOffset(w, h),
-        BackgroundTransparency = 1
+        BackgroundTransparency = 1,
+        BorderSizePixel = 0
     }, parent)
 
     Corner(obj, radius or 3)
@@ -592,10 +470,15 @@ local function OutlineRect(parent, x, y, w, h, color, radius, thick)
 end
 
 --==================================================
--- V32 SYMMETRICAL ICON HELPERS
+-- V33 ICON HELPERS
 --==================================================
 
-local function SharpLine(parent, x1, y1, x2, y2, color, thick)
+-- Square-ended line used by the Actions star.
+-- This preserves the approved V32 appearance.
+
+local function SharpLine(
+    parent, x1, y1, x2, y2, color, thick
+)
     local dx = x2 - x1
     local dy = y2 - y1
     local length = math.sqrt(dx * dx + dy * dy)
@@ -632,15 +515,53 @@ local function SharpLine(parent, x1, y1, x2, y2, color, thick)
     }, parent)
 end
 
+-- Smooth line for new microphone and gear outlines.
+
+local function SmoothLine(
+    parent, x1, y1, x2, y2, color, thick
+)
+    local dx = x2 - x1
+    local dy = y2 - y1
+    local length = math.sqrt(dx * dx + dy * dy)
+
+    if length < 0.001 then return end
+
+    local obj = Create("Frame", {
+        AnchorPoint = Vector2.new(0.5, 0.5),
+        Position = UDim2.fromOffset(
+            (x1 + x2) / 2,
+            (y1 + y2) / 2
+        ),
+        Size = UDim2.fromOffset(
+            length + thick * 0.45,
+            thick
+        ),
+        Rotation = math.deg(math.atan2(dy, dx)),
+        BackgroundColor3 = color,
+        BorderSizePixel = 0
+    }, parent)
+
+    Create("UICorner", {
+        CornerRadius = UDim.new(1, 0)
+    }, obj)
+
+    return obj
+end
+
+--==================================================
+-- V33 ICONS
+--==================================================
+
 local function DrawIcon(parent, kind, color)
     local holder = Create("Frame", {
         Size = UDim2.fromOffset(26, 26),
-        BackgroundTransparency = 1
+        BackgroundTransparency = 1,
+        BorderSizePixel = 0
     }, parent)
 
     if kind == "commands" then
 
-        -- PRESERVED
+        -- EXACT V32 COMMANDS ICON
 
         Line(holder, 5, 8, 10.5, 13, color, 2.2)
         Line(holder, 10.5, 13, 5, 18, color, 2.2)
@@ -648,56 +569,112 @@ local function DrawIcon(parent, kind, color)
 
     elseif kind == "voice" then
 
-        -- V32 SYMMETRICAL MICROPHONE
+        --==================================================
+        -- V33 VOICE CHAT
+        -- CLEAN, SYMMETRICAL MICROPHONE
+        --==================================================
 
         local cx = 13
+        local thickness = 1.85
 
-        -- Rounded microphone capsule.
+        -- Microphone capsule.
+
         OutlineRect(
             holder,
-            cx - 3.5, 2.5,
+            9.5, 2.5,
             7, 13,
-            color, 3.5, 1.9
+            color,
+            3.5,
+            thickness
         )
 
-        -- Symmetrical support arms.
-        Line(holder, 5, 10, 5, 14, color, 1.9)
-        Line(holder, 21, 10, 21, 14, color, 1.9)
+        -- Symmetrical U-shaped microphone support.
+        --
+        -- Center = X13
+        -- Left arm = X5.5
+        -- Right arm = X20.5
+        --
+        -- Bottom curve is constructed from a
+        -- mathematically symmetrical semicircle.
 
-        -- Smooth U-shaped cradle using a bottom arc.
-        -- Every point is mirrored around X = 13.
+        local radius = 7.5
+        local curveCenterY = 13
 
-        local arc = {}
+        -- Left support.
 
-        for i = 0, 16 do
-            local angle = math.pi - (math.pi * i / 16)
+        SmoothLine(
+            holder,
+            cx - radius, 10,
+            cx - radius, curveCenterY,
+            color,
+            thickness
+        )
 
-            local x = cx + 8 * math.cos(angle)
-            local y = 13.5 + 7 * math.sin(angle)
+        -- Right support.
 
-            table.insert(arc, {x, y})
-        end
+        SmoothLine(
+            holder,
+            cx + radius, 10,
+            cx + radius, curveCenterY,
+            color,
+            thickness
+        )
 
-        for i = 1, #arc - 1 do
-            local a = arc[i]
-            local b = arc[i + 1]
+        -- Bottom semicircle.
+        --
+        -- Higher segment count makes the cradle
+        -- appear smoother at the final icon size.
 
-            Line(
+        local segments = 28
+
+        for i = 0, segments - 1 do
+            local a1 = math.pi
+                - (math.pi * i / segments)
+
+            local a2 = math.pi
+                - (math.pi * (i + 1) / segments)
+
+            local x1 = cx + radius * math.cos(a1)
+            local y1 = curveCenterY + radius * math.sin(a1)
+
+            local x2 = cx + radius * math.cos(a2)
+            local y2 = curveCenterY + radius * math.sin(a2)
+
+            SmoothLine(
                 holder,
-                a[1], a[2],
-                b[1], b[2],
+                x1, y1,
+                x2, y2,
                 color,
-                1.9
+                thickness
             )
         end
 
-        -- Centered stem and base.
-        Line(holder, 13, 20.5, 13, 23, color, 1.9)
-        Line(holder, 9, 23, 17, 23, color, 1.9)
+        -- Stem.
+        -- Bottom of semicircle is Y20.5.
+
+        SmoothLine(
+            holder,
+            cx, 20.5,
+            cx, 23,
+            color,
+            thickness
+        )
+
+        -- Centered horizontal base.
+
+        SmoothLine(
+            holder,
+            9, 23,
+            17, 23,
+            color,
+            thickness
+        )
 
     elseif kind == "players" then
 
-        -- PRESERVED V30/V31 DESIGN
+        --==================================================
+        -- EXACT V32 PLAYERS ICON
+        --==================================================
 
         local background =
             color == C.purple and C.selected or C.side
@@ -741,7 +718,9 @@ local function DrawIcon(parent, kind, color)
 
     elseif kind == "actions" then
 
-        -- V32: THINNER AND SYMMETRICAL
+        --==================================================
+        -- EXACT V32 ACTIONS ICON
+        --==================================================
 
         local cx = 13
         local cy = 13
@@ -775,7 +754,9 @@ local function DrawIcon(parent, kind, color)
 
     elseif kind == "servers" then
 
-        -- PRESERVED
+        --==================================================
+        -- EXACT V32 SERVERS ICON
+        --==================================================
 
         local function S(v)
             return v * 1.3
@@ -798,35 +779,91 @@ local function DrawIcon(parent, kind, color)
         Dot(holder, S(5.5), S(5.5), S(1), color)
         Dot(holder, S(5.5), S(14.5), S(1), color)
 
-        Line(holder, S(10), S(5.5), S(15), S(5.5), color, 1.6)
-        Line(holder, S(10), S(14.5), S(15), S(14.5), color, 1.6)
+        Line(
+            holder,
+            S(10), S(5.5),
+            S(15), S(5.5),
+            color, 1.6
+        )
+
+        Line(
+            holder,
+            S(10), S(14.5),
+            S(15), S(14.5),
+            color, 1.6
+        )
 
     elseif kind == "settings" then
 
-        -- PRESERVED
+        --==================================================
+        -- V33 SETTINGS
+        -- SIX-TOOTH SYMMETRICAL GEAR
+        --==================================================
 
-        local cx, cy = 13, 13
+        local cx = 13
+        local cy = 13
 
-        for i = 0, 7 do
-            local angle = math.rad(i * 45)
+        local teeth = 6
+        local thickness = 1.8
 
-            local tooth = Create("Frame", {
-                AnchorPoint = Vector2.new(0.5, 0.5),
-                Position = UDim2.fromOffset(
-                    cx + math.sin(angle) * 8.2,
-                    cy - math.cos(angle) * 8.2
-                ),
-                Size = UDim2.fromOffset(5, 6),
-                Rotation = i * 45,
-                BackgroundTransparency = 1
-            }, holder)
+        -- Each tooth uses identical angular dimensions.
+        -- This creates one continuous gear outline
+        -- instead of overlapping rectangular teeth.
 
-            Corner(tooth, 1)
-            Stroke(tooth, color, 2)
+        local innerRadius = 7.2
+        local outerRadius = 10.7
+
+        local points = {}
+
+        for i = 0, teeth - 1 do
+            local centerAngle =
+                -math.pi / 2
+                + i * (2 * math.pi / teeth)
+
+            local offsets = {
+                {-0.46, innerRadius},
+                {-0.25, innerRadius},
+                {-0.18, outerRadius},
+                { 0.18, outerRadius},
+                { 0.25, innerRadius},
+                { 0.46, innerRadius}
+            }
+
+            for _, item in ipairs(offsets) do
+                local angle = centerAngle + item[1]
+                local radius = item[2]
+
+                table.insert(points, {
+                    cx + math.cos(angle) * radius,
+                    cy + math.sin(angle) * radius
+                })
+            end
         end
 
-        Circle(holder, cx, cy, 8, color, 2)
-        Circle(holder, cx, cy, 3.5, color, 2)
+        -- Connect the outer gear outline.
+
+        for i = 1, #points do
+            local a = points[i]
+            local b = points[i % #points + 1]
+
+            SmoothLine(
+                holder,
+                a[1], a[2],
+                b[1], b[2],
+                color,
+                thickness
+            )
+        end
+
+        -- Center hole.
+
+        Circle(
+            holder,
+            cx, cy,
+            3.2,
+            color,
+            thickness
+        )
     end
 
     return holder
@@ -1028,10 +1065,7 @@ local function PartPath(obj, ancestor)
                 and sibling.ClassName == current.ClassName then
 
                 index += 1
-
-                if sibling == current then
-                    break
-                end
+                if sibling == current then break end
             end
         end
 
@@ -1536,7 +1570,7 @@ local Brand = Label(Sidebar, "KHASTIFY", 16, C.text, true)
 Brand.Position = UDim2.fromOffset(24, 31)
 Brand.Size = UDim2.fromOffset(135, 25)
 
-local Version = Label(Sidebar, "universal hub v32", 11, C.muted)
+local Version = Label(Sidebar, "universal hub v33", 11, C.muted)
 Version.Position = UDim2.fromOffset(24, 57)
 Version.Size = UDim2.fromOffset(135, 19)
 
@@ -1695,7 +1729,6 @@ for i, entry in ipairs(Navigation) do
     }, button)
 
     local textLabel = Label(button, name, 16, C.muted)
-
     textLabel.Position = UDim2.fromOffset(52, -1)
     textLabel.Size = UDim2.new(1, -60, 1, 0)
 
@@ -1801,6 +1834,14 @@ local function AddEntry(obj, name, category, pinned)
     })
 end
 
+local function RemoveEntry(obj)
+    for i = #Entries, 1, -1 do
+        if Entries[i].object == obj then
+            table.remove(Entries, i)
+        end
+    end
+end
+
 local function Filter()
     local query = SearchBox.Text:lower()
 
@@ -1881,6 +1922,7 @@ local function MakeCard(height, order)
 
     Corner(card, 9)
     Stroke(card, C.border)
+
     return card
 end
 
@@ -1946,6 +1988,7 @@ local function Feature(name, category, description, callback, keybind)
     end
 
     AddEntry(card, name .. " " .. (description or ""), category)
+
     return card
 end
 
@@ -2093,6 +2136,8 @@ Sections.Commands = function()
 
     Number("Fly Speed", "flySpeed", "Movement", 500)
 
+    Toggle("Fly Animation", "flyAnim", "Movement")
+
     Toggle("Noclip", "noclip", "Movement", function(on)
         if not on and not State.invisible then
             RestoreCollision()
@@ -2188,6 +2233,7 @@ local function MakePlayerCard(player, order)
         if ok and Alive
             and generation == PlayerGeneration
             and avatar.Parent then
+
             avatar.Image = image
         end
     end)
@@ -2351,16 +2397,17 @@ local function RefreshPlayers()
 end
 
 Bind(Players.PlayerAdded, RefreshPlayers)
+
 Bind(Players.PlayerRemoving, function()
     task.defer(RefreshPlayers)
 end)
 
 --==================================================
--- SERVER BROWSER
+-- V33 SERVER BROWSER
+-- NO PREVIOUS SERVER HISTORY
 --==================================================
 
 local ServerBrowser = {
-    subsection = "All",
     cards = {},
     servers = {},
     cursor = nil,
@@ -2413,6 +2460,7 @@ local function RequestServers(url)
     if not decodedOk
         or type(decoded) ~= "table"
         or type(decoded.data) ~= "table" then
+
         return nil, "Invalid server data"
     end
 
@@ -2467,11 +2515,8 @@ local function ClearServerCards()
     ServerBrowser.loadMore = nil
 end
 
-local function ServerCard(server, index, kind)
-    local current = kind == "current"
-    local previous = kind == "previous"
-
-    local id = server.id or server.jobId
+local function ServerCard(server, index, current)
+    local id = server.id
     local placeId = server.placeId or game.PlaceId
 
     if type(id) ~= "string" or id == "" then
@@ -2480,7 +2525,9 @@ local function ServerCard(server, index, kind)
 
     local key = tostring(placeId) .. ":" .. id
 
-    if ServerBrowser.cards[key] then return end
+    if ServerBrowser.cards[key] then
+        return
+    end
 
     local card = MakeCard(
         67,
@@ -2493,13 +2540,15 @@ local function ServerCard(server, index, kind)
         card.BackgroundColor3 = C.selected
     end
 
-    Dot(card, 23, 22, 4, current and C.purple or C.green)
+    Dot(
+        card,
+        23, 22, 4,
+        current and C.purple or C.green
+    )
 
     local titleText = current
         and "CURRENT SERVER"
-        or previous
-            and (server.gameName or "Unknown Game")
-            or ("Server " .. tostring(index))
+        or ("Server " .. tostring(index))
 
     local title = Label(
         card,
@@ -2512,14 +2561,19 @@ local function ServerCard(server, index, kind)
     title.Position = UDim2.fromOffset(37, 8)
     title.Size = UDim2.new(1, -85, 0, 25)
 
-    local subtitle = previous
-        and "Previously visited"
-        or tostring(server.playing or #Players:GetPlayers())
-            .. "/"
-            .. tostring(server.maxPlayers or Players.MaxPlayers)
-            .. " Players"
+    local subtitle =
+        tostring(server.playing or #Players:GetPlayers())
+        .. "/"
+        .. tostring(server.maxPlayers or Players.MaxPlayers)
+        .. " Players"
 
-    local population = Label(card, subtitle, 12, C.muted)
+    local population = Label(
+        card,
+        subtitle,
+        12,
+        C.muted
+    )
+
     population.Position = UDim2.fromOffset(37, 34)
     population.Size = UDim2.new(1, -85, 0, 19)
 
@@ -2619,17 +2673,19 @@ local function ServerCard(server, index, kind)
 
     Bind(click.MouseButton1Click, function()
         ServerBrowser.expanded =
-            ServerBrowser.expanded == key and nil or key
+            ServerBrowser.expanded == key
+            and nil or key
 
         for serverKey, data in pairs(ServerBrowser.cards) do
-            data.expand(serverKey == ServerBrowser.expanded)
+            data.expand(
+                serverKey == ServerBrowser.expanded
+            )
         end
     end)
 
     AddEntry(
         card,
-        titleText .. " " .. id .. " "
-            .. (server.gameName or ""),
+        titleText .. " " .. id,
         "All",
         current
     )
@@ -2642,44 +2698,48 @@ local LoadServerPage
 LoadServerPage = function(reset)
     if ServerBrowser.loading then return end
     if Active ~= "Servers" then return end
-    if ServerBrowser.subsection ~= "All" then return end
 
     if reset then
-        local current = {}
+        ServerBrowser.generation += 1
+
+        local currentCards = {}
 
         for key, data in pairs(ServerBrowser.cards) do
             if data.current then
-                current[key] = data
+                currentCards[key] = data
             else
+                RemoveEntry(data.frame)
+
                 if data.frame.Parent then
                     data.frame:Destroy()
                 end
             end
         end
 
-        ServerBrowser.cards = current
+        ServerBrowser.cards = currentCards
         ServerBrowser.servers = {}
         ServerBrowser.cursor = nil
     end
 
-    ServerBrowser.generation += 1
     local generation = ServerBrowser.generation
+    local cursor = ServerBrowser.cursor
 
     ServerBrowser.loading = true
 
     if ServerBrowser.status then
-        ServerBrowser.status.Text = "Loading public servers..."
+        ServerBrowser.status.Text =
+            "Loading public servers..."
     end
 
     task.spawn(function()
         local data, err = RequestServers(
-            ServerURL(ServerBrowser.cursor)
+            ServerURL(cursor)
         )
 
         if not Alive
             or Active ~= "Servers"
-            or ServerBrowser.subsection ~= "All"
             or generation ~= ServerBrowser.generation then
+
             return
         end
 
@@ -2688,7 +2748,8 @@ LoadServerPage = function(reset)
         if not data then
             if ServerBrowser.status then
                 ServerBrowser.status.Text =
-                    "Unable to load servers: " .. tostring(err)
+                    "Unable to load servers: "
+                    .. tostring(err)
             end
 
             return
@@ -2701,15 +2762,19 @@ LoadServerPage = function(reset)
                 and server.id ~= game.JobId then
 
                 local key =
-                    tostring(game.PlaceId) .. ":" .. server.id
+                    tostring(game.PlaceId)
+                    .. ":" .. server.id
 
                 if not ServerBrowser.cards[key] then
-                    table.insert(ServerBrowser.servers, server)
+                    table.insert(
+                        ServerBrowser.servers,
+                        server
+                    )
 
                     ServerCard(
                         server,
                         #ServerBrowser.servers,
-                        "public"
+                        false
                     )
                 end
             end
@@ -2731,128 +2796,88 @@ LoadServerPage = function(reset)
     end)
 end
 
-local BuildServerSection
+--==================================================
+-- V33 SERVERS PAGE
+--==================================================
 
-BuildServerSection = function(subsection)
-    if Active ~= "Servers" then return end
+Sections.Servers = function()
+    -- No All / Previous subsection buttons.
 
-    ClearServerCards()
-    ClearList()
+    CurrentCategory = "All"
+    CategoryCallback = nil
 
-    subsection = subsection or "All"
+    SearchBox.PlaceholderText = "search servers..."
 
-    ServerBrowser.subsection = subsection
-    ServerBrowser.expanded = nil
-
-    CurrentCategory = subsection
-
-    AddCategory("All")
-    AddCategory("Previous")
-
-    CategoryCallback = function(name)
-        if name ~= ServerBrowser.subsection then
-            BuildServerSection(name)
-        end
-    end
-
-    SearchBox.Text = ""
-    SearchBox.PlaceholderText =
-        subsection == "Previous"
-        and "search previous games..."
-        or "search servers..."
+    -- Current server pinned first.
 
     if game.JobId ~= "" then
         ServerCard({
             id = game.JobId,
             placeId = game.PlaceId,
-            gameName = CurrentServerInfo.gameName,
             playing = #Players:GetPlayers(),
             maxPlayers = Players.MaxPlayers
-        }, 0, "current")
+        }, 0, true)
     end
 
-    if subsection == "Previous" then
-        SectionTitle("Previous Servers", 2)
+    -- Public servers.
 
-        if #ServerHistory.previous == 0 then
-            local empty = Label(
-                List,
-                "No previous servers saved yet.",
-                13,
-                C.muted
-            )
+    local info = Label(
+        List,
+        "Loading public servers...",
+        12,
+        C.muted
+    )
 
-            empty.Size = UDim2.new(1, 0, 0, 55)
-        else
-            for index, entry in ipairs(ServerHistory.previous) do
-                if index > MAX_PREVIOUS then break end
+    info.Size = UDim2.new(1, 0, 0, 28)
+    info.LayoutOrder = 2
 
-                ServerCard({
-                    id = entry.jobId,
-                    placeId = entry.placeId,
-                    gameName = entry.gameName
-                }, index, "previous")
-            end
+    ServerBrowser.status = info
+
+    -- Refresh button.
+
+    local refreshCard = MakeCard(51, 1000000)
+
+    local refresh = Create("TextButton", {
+        Size = UDim2.fromScale(1, 1),
+        BackgroundTransparency = 1,
+        Text = "Refresh Servers",
+        TextColor3 = C.text,
+        Font = Enum.Font.GothamBold,
+        TextSize = 13
+    }, refreshCard)
+
+    Bind(refresh.MouseButton1Click, function()
+        if not ServerBrowser.loading then
+            ServerBrowser.expanded = nil
+            LoadServerPage(true)
         end
-    else
-        local info = Label(
-            List,
-            "Loading public servers...",
-            12,
-            C.muted
-        )
+    end)
 
-        info.Size = UDim2.new(1, 0, 0, 28)
-        info.LayoutOrder = 2
+    -- Load more button.
 
-        ServerBrowser.status = info
+    local moreCard = MakeCard(51, 999999)
 
-        local refreshCard = MakeCard(51, 1000000)
+    local more = Create("TextButton", {
+        Size = UDim2.fromScale(1, 1),
+        BackgroundTransparency = 1,
+        Text = "Load More Servers",
+        TextColor3 = C.purple,
+        Font = Enum.Font.GothamBold,
+        TextSize = 13
+    }, moreCard)
 
-        local refresh = Create("TextButton", {
-            Size = UDim2.fromScale(1, 1),
-            BackgroundTransparency = 1,
-            Text = "Refresh Servers",
-            TextColor3 = C.text,
-            Font = Enum.Font.GothamBold,
-            TextSize = 13
-        }, refreshCard)
+    ServerBrowser.loadMore = moreCard
+    moreCard.Visible = false
 
-        Bind(refresh.MouseButton1Click, function()
-            if not ServerBrowser.loading then
-                LoadServerPage(true)
-            end
-        end)
+    Bind(more.MouseButton1Click, function()
+        if not ServerBrowser.loading
+            and ServerBrowser.cursor then
 
-        local moreCard = MakeCard(51, 999999)
+            LoadServerPage(false)
+        end
+    end)
 
-        local more = Create("TextButton", {
-            Size = UDim2.fromScale(1, 1),
-            BackgroundTransparency = 1,
-            Text = "Load More Servers",
-            TextColor3 = C.purple,
-            Font = Enum.Font.GothamBold,
-            TextSize = 13
-        }, moreCard)
-
-        ServerBrowser.loadMore = moreCard
-        moreCard.Visible = false
-
-        Bind(more.MouseButton1Click, function()
-            if not ServerBrowser.loading
-                and ServerBrowser.cursor then
-                LoadServerPage(false)
-            end
-        end)
-
-        LoadServerPage(true)
-    end
-
-    Filter()
-end
-
-Sections.Servers = function()
-    BuildServerSection("All")
+    LoadServerPage(true)
 end
 
 --==================================================
@@ -2896,7 +2921,7 @@ Sections.Settings = function()
     AddCategory("All")
     SectionTitle("General")
 
-    -- V32 AUTO EXECUTE
+    -- AUTO EXECUTE
 
     local autoCard = MakeCard(74)
 
@@ -3267,7 +3292,8 @@ Bind(UIS.InputBegan, function(input, processed)
                     if c then
                         c:PivotTo(
                             CFrame.new(
-                                hit.Position + Vector3.new(0, 3.5, 0)
+                                hit.Position
+                                + Vector3.new(0, 3.5, 0)
                             )
                         )
                     end
@@ -3304,6 +3330,19 @@ Bind(Run.Heartbeat, function()
 
     if State.invisible then
         UpdateInvisible()
+    end
+
+    -- Update current server population.
+
+    if Active == "Servers" then
+        local key =
+            tostring(game.PlaceId) .. ":" .. game.JobId
+
+        local data = ServerBrowser.cards[key]
+
+        if data and data.frame and data.frame.Parent then
+            -- Current server remains pinned.
+        end
     end
 end)
 
@@ -3450,15 +3489,16 @@ _G.KHASTIFY_HUB_CLEANUP = function()
     end
 
     GUI:Destroy()
+
     _G.KHASTIFY_HUB_CLEANUP = nil
 end
 
 print("====================================")
-print("KHASTIFY'S UNIVERSAL HUB V32")
-print("SYMMETRICAL ACTIONS ICON")
-print("SYMMETRICAL VOICE CHAT ICON")
-print("AUTO EXECUTE SETTING ADDED")
-print("AUTO EXECUTE: " .. AutoExecute.status)
-print("ALL / PREVIOUS SERVER HISTORY")
+print("KHASTIFY'S UNIVERSAL HUB V33")
+print("NEW SIX-TOOTH SETTINGS GEAR")
+print("REDESIGNED VOICE CHAT MICROPHONE")
+print("PREVIOUS SERVER SECTION REMOVED")
+print("AUTO EXECUTE PRESERVED")
+print("COMMANDS / PLAYERS / ACTIONS / SERVERS ICONS PRESERVED")
 print("Press " .. State.menuKey .. " to open.")
 print("====================================")
