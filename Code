@@ -1,14 +1,18 @@
 --[[
-    KHASTIFY'S UNIVERSAL HUB V42
+    KHASTIFY'S UNIVERSAL HUB V43
 
-    V42:
-    - Solid four-point diamond sparkle
-    - Solid microphone support arms
-    - Front Players head moved 1px up and right
-    - Commands and Servers icons preserved
-    - Six-tooth Settings gear preserved
-    - HTTP 429 retry handling
-    - Auto Execute preserved
+    ICONS
+    Commands   - V42 preserved
+    Voice Chat - Reference-style microphone
+    Players    - V42 preserved
+    Actions    - Reference-style four-point sparkle
+    Servers    - V42 preserved
+    Settings   - Reference-style eight-tooth gear
+
+    Native Roblox GUI only.
+    No external icon assets.
+    No EditableImage.
+    No executor-specific drawing API for icons.
 
     K = Toggle Hub
     Q = Dash
@@ -36,7 +40,10 @@ local Parent = (gethui and gethui())
     or LP:WaitForChild("PlayerGui")
 
 local Old = Parent:FindFirstChild("KhastifyUniversalHub")
-if Old then Old:Destroy() end
+
+if Old then
+    Old:Destroy()
+end
 
 local Alive = true
 local Connections = {}
@@ -135,7 +142,7 @@ local C = {
 }
 
 --==================================================
--- V42 ICON ENGINE
+-- V43 ICON ENGINE
 --==================================================
 
 local ICON_SIZE = 120
@@ -161,7 +168,9 @@ local function IconLine(parent, x1, y1, x2, y2, color, thickness)
     local dy = y2 - y1
     local length = math.sqrt(dx * dx + dy * dy)
 
-    if length < 0.001 then return end
+    if length < 0.001 then
+        return
+    end
 
     local line = Create("Frame", {
         AnchorPoint = Vector2.new(0.5, 0.5),
@@ -176,6 +185,7 @@ local function IconLine(parent, x1, y1, x2, y2, color, thickness)
     }, parent)
 
     Corner(line, thickness / 2)
+
     return line
 end
 
@@ -210,8 +220,111 @@ local function IconOutline(parent, x, y, w, h, color, thickness, radius)
     return frame
 end
 
--- Original arc drawing retained for the approved icons.
-local function Arc(
+--==================================================
+-- V43 CURVE RENDERING
+--==================================================
+
+-- This renderer uses calculated curve positions and
+-- overlapping segments with consistent thickness.
+--
+-- All drawing is performed using standard GUI Frames.
+-- Curves remain resolution-dependent because Roblox
+-- does not provide native arbitrary vector paths.
+
+local function CurveSegment(parent, x1, y1, x2, y2, color, thickness)
+    local dx = x2 - x1
+    local dy = y2 - y1
+
+    local length = math.sqrt(dx * dx + dy * dy)
+
+    if length < 0.001 then
+        return
+    end
+
+    local overlap = 0.9
+
+    local ux = dx / length
+    local uy = dy / length
+
+    local ax = x1 - ux * overlap
+    local ay = y1 - uy * overlap
+
+    local bx = x2 + ux * overlap
+    local by = y2 + uy * overlap
+
+    local frame = Create("Frame", {
+        AnchorPoint = Vector2.new(0.5, 0.5),
+        Position = UDim2.fromOffset(
+            (ax + bx) / 2,
+            (ay + by) / 2
+        ),
+        Size = UDim2.fromOffset(
+            length + overlap * 2,
+            thickness
+        ),
+        Rotation = math.deg(math.atan2(dy, dx)),
+        BackgroundColor3 = color,
+        BorderSizePixel = 0
+    }, parent)
+
+    return frame
+end
+
+local function CurveDot(parent, x, y, color, diameter)
+    return IconCircle(
+        parent,
+        x - diameter / 2,
+        y - diameter / 2,
+        diameter,
+        color
+    )
+end
+
+local function BezierValue(a, b, c, d, t)
+    local u = 1 - t
+
+    return
+        a * u * u * u
+        + 3 * b * u * u * t
+        + 3 * c * u * t * t
+        + d * t * t * t
+end
+
+local function DrawBezier(
+    parent,
+    p0, p1, p2, p3,
+    color,
+    thickness,
+    steps
+)
+    local previousX = p0[1]
+    local previousY = p0[2]
+
+    for i = 1, steps do
+        local t = i / steps
+
+        local x = BezierValue(
+            p0[1], p1[1], p2[1], p3[1], t
+        )
+
+        local y = BezierValue(
+            p0[2], p1[2], p2[2], p3[2], t
+        )
+
+        CurveSegment(
+            parent,
+            previousX, previousY,
+            x, y,
+            color,
+            thickness
+        )
+
+        previousX = x
+        previousY = y
+    end
+end
+
+local function DrawArc(
     parent,
     cx, cy,
     rx, ry,
@@ -219,20 +332,20 @@ local function Arc(
     endAngle,
     color,
     thickness,
-    segments
+    steps
 )
     local previousX
     local previousY
 
-    for i = 0, segments do
+    for i = 0, steps do
         local angle = startAngle
-            + (endAngle - startAngle) * i / segments
+            + (endAngle - startAngle) * i / steps
 
         local x = cx + math.cos(angle) * rx
         local y = cy + math.sin(angle) * ry
 
         if previousX then
-            IconLine(
+            CurveSegment(
                 parent,
                 previousX, previousY,
                 x, y,
@@ -247,175 +360,7 @@ local function Arc(
 end
 
 --==================================================
--- V42 SOLID CURVE ENGINE
---==================================================
-
--- V41 used separate rotated rectangles.
--- V42 adds overlapping strokes and filled circular
--- joints to prevent tiny seams between segments.
-
-local function SolidLine(
-    parent,
-    x1, y1,
-    x2, y2,
-    color,
-    thickness
-)
-    local dx = x2 - x1
-    local dy = y2 - y1
-    local length = math.sqrt(dx * dx + dy * dy)
-
-    if length < 0.001 then return end
-
-    local overlap = 2.5
-
-    local ux = dx / length
-    local uy = dy / length
-
-    local ax = x1 - ux * overlap
-    local ay = y1 - uy * overlap
-
-    local bx = x2 + ux * overlap
-    local by = y2 + uy * overlap
-
-    local extendedLength = length + overlap * 2
-
-    local line = Create("Frame", {
-        AnchorPoint = Vector2.new(0.5, 0.5),
-        Position = UDim2.fromOffset(
-            (ax + bx) / 2,
-            (ay + by) / 2
-        ),
-        Size = UDim2.fromOffset(
-            extendedLength,
-            thickness
-        ),
-        Rotation = math.deg(math.atan2(dy, dx)),
-        BackgroundColor3 = color,
-        BorderSizePixel = 0
-    }, parent)
-
-    Corner(line, thickness / 2)
-
-    return line
-end
-
-local function SolidJoint(parent, x, y, color, thickness)
-    return IconCircle(
-        parent,
-        x - thickness / 2,
-        y - thickness / 2,
-        thickness,
-        color
-    )
-end
-
-local function SolidArc(
-    parent,
-    cx, cy,
-    rx, ry,
-    startAngle,
-    endAngle,
-    color,
-    thickness,
-    segments
-)
-    local points = {}
-
-    for i = 0, segments do
-        local angle = startAngle
-            + (endAngle - startAngle) * i / segments
-
-        points[#points + 1] = {
-            cx + math.cos(angle) * rx,
-            cy + math.sin(angle) * ry
-        }
-    end
-
-    for i = 1, #points - 1 do
-        local a = points[i]
-        local b = points[i + 1]
-
-        SolidLine(
-            parent,
-            a[1], a[2],
-            b[1], b[2],
-            color,
-            thickness
-        )
-    end
-
-    -- Fill every connection after drawing the strokes.
-    for _, point in ipairs(points) do
-        SolidJoint(
-            parent,
-            point[1],
-            point[2],
-            color,
-            thickness
-        )
-    end
-end
-
-local function BezierPoint(a, b, c, d, t)
-    local u = 1 - t
-
-    return
-        a * u * u * u
-        + 3 * b * u * u * t
-        + 3 * c * u * t * t
-        + d * t * t * t
-end
-
-local function SolidBezier(
-    parent,
-    p0, p1, p2, p3,
-    color,
-    thickness,
-    segments
-)
-    local points = {}
-
-    for i = 0, segments do
-        local t = i / segments
-
-        local x = BezierPoint(
-            p0[1], p1[1], p2[1], p3[1], t
-        )
-
-        local y = BezierPoint(
-            p0[2], p1[2], p2[2], p3[2], t
-        )
-
-        points[#points + 1] = {x, y}
-    end
-
-    for i = 1, #points - 1 do
-        local a = points[i]
-        local b = points[i + 1]
-
-        SolidLine(
-            parent,
-            a[1], a[2],
-            b[1], b[2],
-            color,
-            thickness
-        )
-    end
-
-    for _, point in ipairs(points) do
-        SolidJoint(
-            parent,
-            point[1],
-            point[2],
-            color,
-            thickness
-        )
-    end
-end
-
---==================================================
--- COMMANDS - UNCHANGED
+-- COMMANDS - V42 PRESERVED
 --==================================================
 
 local function DrawCommands(parent, color)
@@ -427,62 +372,70 @@ local function DrawCommands(parent, color)
 end
 
 --==================================================
--- VOICE CHAT - V42 SOLID ARMS
+-- VOICE CHAT - V43 REFERENCE DESIGN
 --==================================================
 
 local function DrawVoice(parent, color)
-    -- Original microphone capsule.
+    -- Solid rounded microphone capsule.
     IconFrame(
         parent,
-        43, 14,
-        34, 58,
+        43, 13,
+        34, 60,
         color,
         17
     )
 
-    -- Continuous lower U-shaped support.
-    SolidArc(
+    -- Smooth, symmetrical U-shaped support.
+    -- The arms and curve share the same centerline.
+
+    local cx = 60
+    local cy = 66
+    local radiusX = 31
+    local radiusY = 31
+    local thickness = 9
+
+    DrawArc(
         parent,
-        60, 66,
-        31, 31,
-        0,
-        math.pi,
+        cx, cy,
+        radiusX, radiusY,
+        0, math.pi,
         color,
-        9,
+        thickness,
         48
     )
 
-    -- Both arms use solid rectangles.
+    -- Left vertical arm.
     IconFrame(
         parent,
-        25, 49,
-        9, 22,
+        24.5, 48,
+        9, 21,
         color,
-        4
+        4.5
     )
 
+    -- Right vertical arm.
     IconFrame(
         parent,
-        86, 49,
-        9, 22,
+        86.5, 48,
+        9, 21,
         color,
-        4
+        4.5
     )
 
-    -- Reinforce both arm-to-curve connections.
-    SolidJoint(parent, 29, 66, color, 11)
-    SolidJoint(parent, 91, 66, color, 11)
+    -- Solid connections.
+    CurveDot(parent, 29, 66, color, 9)
+    CurveDot(parent, 91, 66, color, 9)
 
     -- Centered stem.
     IconFrame(
         parent,
-        56, 94,
-        8, 16,
+        56, 95,
+        8, 15,
         color,
         4
     )
 
-    -- Symmetrical base.
+    -- Horizontal base.
     IconFrame(
         parent,
         42, 105,
@@ -493,11 +446,11 @@ local function DrawVoice(parent, color)
 end
 
 --==================================================
--- PLAYERS - V38 WITH 1PX HEAD ADJUSTMENT
+-- PLAYERS - V42 PRESERVED
 --==================================================
 
 local function DrawPlayers(parent, color)
-    -- Rear figure unchanged.
+    -- Rear figure.
     IconCircle(parent, 76, 20, 25, color, 7)
 
     IconOutline(
@@ -507,7 +460,7 @@ local function DrawPlayers(parent, color)
         color, 7, 16
     )
 
-    -- Front body unchanged.
+    -- Front figure body.
     local mask = IconFrame(
         parent,
         14, 54,
@@ -527,10 +480,8 @@ local function DrawPlayers(parent, color)
 
     body.ZIndex = 4
 
-    -- V41: x=29, y=15
-    -- V42: x=33, y=11
-    --
-    -- 4 drawing units = 1 visible pixel.
+    -- V42 approved position:
+    -- One visible pixel up and right from V38.
 
     local head = IconCircle(
         parent,
@@ -544,83 +495,79 @@ local function DrawPlayers(parent, color)
 end
 
 --==================================================
--- ACTIONS - V42 SOLID DIAMOND SPARKLE
+-- ACTIONS - V43 REFERENCE DIAMOND SPARKLE
 --==================================================
 
 local function DrawActions(parent, color)
-    -- Same V41 four-point diamond geometry.
-    -- Only the stroke construction has changed.
+    -- Four-point sparkle.
+    -- Symmetrical inward-curving sides.
+    -- Rounded tips and hollow center.
 
-    local thickness = 11
-    local segments = 16
+    local thickness = 10.5
+    local steps = 24
 
-    -- Top to right.
-    SolidBezier(
+    local top = {60, 10}
+    local right = {110, 60}
+    local bottom = {60, 110}
+    local left = {10, 60}
+
+    -- Top-right curve.
+    DrawBezier(
         parent,
-        {60, 10},
+        top,
         {73, 43},
         {77, 47},
-        {110, 60},
+        right,
         color,
         thickness,
-        segments
+        steps
     )
 
-    -- Right to bottom.
-    SolidBezier(
+    -- Bottom-right curve.
+    DrawBezier(
         parent,
-        {110, 60},
+        right,
         {77, 73},
         {73, 77},
-        {60, 110},
+        bottom,
         color,
         thickness,
-        segments
+        steps
     )
 
-    -- Bottom to left.
-    SolidBezier(
+    -- Bottom-left curve.
+    DrawBezier(
         parent,
-        {60, 110},
+        bottom,
         {47, 77},
         {43, 73},
-        {10, 60},
+        left,
         color,
         thickness,
-        segments
+        steps
     )
 
-    -- Left to top.
-    SolidBezier(
+    -- Top-left curve.
+    DrawBezier(
         parent,
-        {10, 60},
+        left,
         {43, 47},
         {47, 43},
-        {60, 10},
+        top,
         color,
         thickness,
-        segments
+        steps
     )
 
-    -- Rounded outer tips.
-    for _, point in ipairs({
-        {60, 10},
-        {110, 60},
-        {60, 110},
-        {10, 60}
-    }) do
-        SolidJoint(
-            parent,
-            point[1],
-            point[2],
-            color,
-            thickness
-        )
-    end
+    -- Rounded tips.
+    CurveDot(parent, 60, 10, color, thickness)
+    CurveDot(parent, 110, 60, color, thickness)
+    CurveDot(parent, 60, 110, color, thickness)
+    CurveDot(parent, 10, 60, color, thickness)
 end
 
 --==================================================
--- SERVERS - UNCHANGED
+-- SERVERS - V42 PRESERVED
 --==================================================
 
 local function DrawServers(parent, color)
@@ -651,48 +598,79 @@ local function DrawServers(parent, color)
 end
 
 --==================================================
--- SETTINGS - SIX-TOOTH GEAR UNCHANGED
+-- SETTINGS - V43 EIGHT-TOOTH GEAR
 --==================================================
 
 local function DrawSettings(parent, color)
-    local cx, cy = 60, 60
+    local cx = 60
+    local cy = 60
 
-    Arc(
-        parent,
-        cx, cy,
-        33, 33,
-        0,
-        math.pi * 2,
-        color,
-        13,
-        72
-    )
+    -- Eight symmetrical teeth.
+    local teeth = 8
 
-    for i = 0, 5 do
-        local angle = i * math.pi / 3
+    -- Teeth are placed first so their inner ends
+    -- connect cleanly to the circular gear body.
+
+    for i = 0, teeth - 1 do
+        local angle =
+            -math.pi / 2 + i * math.pi * 2 / teeth
 
         local dx = math.cos(angle)
         local dy = math.sin(angle)
 
+        local innerRadius = 32
+        local outerRadius = 46
+
+        local x1 = cx + dx * innerRadius
+        local y1 = cy + dy * innerRadius
+
+        local x2 = cx + dx * outerRadius
+        local y2 = cy + dy * outerRadius
+
         IconLine(
             parent,
-            cx + dx * 34,
-            cy + dy * 34,
-            cx + dx * 46,
-            cy + dy * 46,
+            x1, y1,
+            x2, y2,
             color,
             17
         )
     end
 
-    IconCircle(
+    -- Circular gear body.
+    -- A single circular UIStroke avoids seams
+    -- between individual arc segments.
+
+    local ring = IconFrame(
         parent,
-        47, 47,
+        cx - 34,
+        cy - 34,
+        68, 68,
+        color,
+        34
+    )
+
+    ring.BackgroundTransparency = 1
+
+    Create("UIStroke", {
+        Color = color,
+        Thickness = 13,
+        ApplyStrokeMode = Enum.ApplyStrokeMode.Border
+    }, ring)
+
+    -- Perfectly centered circular opening.
+    local hole = IconCircle(
+        parent,
+        cx - 13,
+        cy - 13,
         26,
         color,
         8
     )
 end
+
+--==================================================
+-- ICON REGISTRY
+--==================================================
 
 local IconDrawers = {
     commands = DrawCommands,
@@ -1710,7 +1688,7 @@ Brand.Size = UDim2.fromOffset(135, 25)
 
 local Version = Label(
     Sidebar,
-    "universal hub v42",
+    "universal hub v43",
     11,
     C.muted
 )
@@ -3431,7 +3409,7 @@ Sections.Settings = function()
 
     local title = Label(
         card,
-        "V42 GUI Icons",
+        "V43 Reference Icons",
         14,
         C.text,
         true
@@ -3442,7 +3420,7 @@ Sections.Settings = function()
 
     local status = Label(
         card,
-        "Six icons drawn directly in Roblox",
+        "Native Roblox GUI rendering",
         12,
         C.green
     )
@@ -3452,7 +3430,7 @@ Sections.Settings = function()
 
     local description = Label(
         card,
-        "Solid curves · adjusted Players head",
+        "Reference geometry · no external assets",
         11,
         C.faint
     )
@@ -3460,7 +3438,7 @@ Sections.Settings = function()
     description.Position = UDim2.fromOffset(14, 55)
     description.Size = UDim2.new(1, -28, 0, 17)
 
-    AddEntry(card, "v42 icon system", "All")
+    AddEntry(card, "v43 icon system", "All")
 end
 
 --==================================================
@@ -3966,10 +3944,11 @@ _G.KHASTIFY_HUB_CLEANUP = function()
 end
 
 print("====================================")
-print("KHASTIFY'S UNIVERSAL HUB V42")
-print("SOLID DIAMOND SPARKLE")
-print("SOLID MICROPHONE SUPPORT")
-print("PLAYERS HEAD POSITION ADJUSTED")
+print("KHASTIFY'S UNIVERSAL HUB V43")
+print("REFERENCE-STYLE MICROPHONE")
+print("REFERENCE-STYLE DIAMOND SPARKLE")
+print("EIGHT-TOOTH SETTINGS GEAR")
+print("NATIVE ROBLOX GUI ICONS")
 print("AUTO EXECUTE PRESERVED")
 print("HTTP 429 HANDLING PRESERVED")
 print("Press " .. State.menuKey .. " to open.")
