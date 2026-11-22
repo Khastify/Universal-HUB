@@ -1,18 +1,19 @@
 --[[
-    KHASTIFY'S UNIVERSAL HUB V43
+    KHASTIFY'S UNIVERSAL HUB V44
 
-    ICONS
-    Commands   - V42 preserved
-    Voice Chat - Reference-style microphone
-    Players    - V42 preserved
-    Actions    - Reference-style four-point sparkle
-    Servers    - V42 preserved
-    Settings   - Reference-style eight-tooth gear
+    V44 ICON CHANGES:
+    - Actions: thinner four-point sparkle outline
+    - Voice Chat: thinner support arms and curved support
+    - Settings: redesigned eight-tooth gear
 
-    Native Roblox GUI only.
-    No external icon assets.
-    No EditableImage.
-    No executor-specific drawing API for icons.
+    PRESERVED:
+    - Commands icon
+    - Players icon and adjusted front head
+    - Servers icon
+    - Auto Execute
+    - HTTP 429 handling
+    - Commands and movement features
+    - Player and server browsers
 
     K = Toggle Hub
     Q = Dash
@@ -142,7 +143,7 @@ local C = {
 }
 
 --==================================================
--- V43 ICON ENGINE
+-- ICON ENGINE
 --==================================================
 
 local ICON_SIZE = 120
@@ -221,27 +222,25 @@ local function IconOutline(parent, x, y, w, h, color, thickness, radius)
 end
 
 --==================================================
--- V43 CURVE RENDERING
+-- CURVE ENGINE
 --==================================================
 
--- This renderer uses calculated curve positions and
--- overlapping segments with consistent thickness.
---
--- All drawing is performed using standard GUI Frames.
--- Curves remain resolution-dependent because Roblox
--- does not provide native arbitrary vector paths.
-
-local function CurveSegment(parent, x1, y1, x2, y2, color, thickness)
+local function CurveSegment(
+    parent,
+    x1, y1,
+    x2, y2,
+    color,
+    thickness
+)
     local dx = x2 - x1
     local dy = y2 - y1
-
     local length = math.sqrt(dx * dx + dy * dy)
 
     if length < 0.001 then
         return
     end
 
-    local overlap = 0.9
+    local overlap = 1.1
 
     local ux = dx / length
     local uy = dy / length
@@ -360,7 +359,7 @@ local function DrawArc(
 end
 
 --==================================================
--- COMMANDS - V42 PRESERVED
+-- COMMANDS - UNCHANGED
 --==================================================
 
 local function DrawCommands(parent, color)
@@ -372,11 +371,12 @@ local function DrawCommands(parent, color)
 end
 
 --==================================================
--- VOICE CHAT - V43 REFERENCE DESIGN
+-- VOICE CHAT - V44
 --==================================================
 
 local function DrawVoice(parent, color)
-    -- Solid rounded microphone capsule.
+    -- Original microphone capsule retained.
+
     IconFrame(
         parent,
         43, 13,
@@ -385,72 +385,78 @@ local function DrawVoice(parent, color)
         17
     )
 
-    -- Smooth, symmetrical U-shaped support.
-    -- The arms and curve share the same centerline.
+    -- V44: thinner U-shaped support.
 
-    local cx = 60
-    local cy = 66
-    local radiusX = 31
-    local radiusY = 31
-    local thickness = 9
+    local supportThickness = 6
 
     DrawArc(
         parent,
-        cx, cy,
-        radiusX, radiusY,
-        0, math.pi,
+        60, 66,
+        31, 31,
+        0,
+        math.pi,
         color,
-        thickness,
+        supportThickness,
         48
     )
 
-    -- Left vertical arm.
+    -- Left arm.
     IconFrame(
         parent,
-        24.5, 48,
-        9, 21,
+        26, 48,
+        supportThickness, 21,
         color,
-        4.5
+        3
     )
 
-    -- Right vertical arm.
+    -- Right arm.
     IconFrame(
         parent,
-        86.5, 48,
-        9, 21,
+        88, 48,
+        supportThickness, 21,
         color,
-        4.5
+        3
     )
 
-    -- Solid connections.
-    CurveDot(parent, 29, 66, color, 9)
-    CurveDot(parent, 91, 66, color, 9)
-
-    -- Centered stem.
-    IconFrame(
+    -- Connections use the same thickness.
+    CurveDot(
         parent,
-        56, 95,
-        8, 15,
+        29, 66,
         color,
-        4
+        supportThickness
     )
 
-    -- Horizontal base.
+    CurveDot(
+        parent,
+        91, 66,
+        color,
+        supportThickness
+    )
+
+    -- Slightly thinner centered stem.
     IconFrame(
         parent,
-        42, 105,
-        36, 8,
+        57, 95,
+        6, 15,
         color,
-        4
+        3
+    )
+
+    -- Symmetrical base.
+    IconFrame(
+        parent,
+        43, 106,
+        34, 7,
+        color,
+        3.5
     )
 end
 
 --==================================================
--- PLAYERS - V42 PRESERVED
+-- PLAYERS - V42 POSITION PRESERVED
 --==================================================
 
 local function DrawPlayers(parent, color)
-    -- Rear figure.
     IconCircle(parent, 76, 20, 25, color, 7)
 
     IconOutline(
@@ -460,7 +466,6 @@ local function DrawPlayers(parent, color)
         color, 7, 16
     )
 
-    -- Front figure body.
     local mask = IconFrame(
         parent,
         14, 54,
@@ -480,9 +485,6 @@ local function DrawPlayers(parent, color)
 
     body.ZIndex = 4
 
-    -- V42 approved position:
-    -- One visible pixel up and right from V38.
-
     local head = IconCircle(
         parent,
         33, 11,
@@ -495,15 +497,14 @@ local function DrawPlayers(parent, color)
 end
 
 --==================================================
--- ACTIONS - V43 REFERENCE DIAMOND SPARKLE
+-- ACTIONS - V44 THINNER LINES
 --==================================================
 
 local function DrawActions(parent, color)
-    -- Four-point sparkle.
-    -- Symmetrical inward-curving sides.
-    -- Rounded tips and hollow center.
+    -- Approved V43 geometry retained.
+    -- V44 reduces stroke thickness only.
 
-    local thickness = 10.5
+    local thickness = 8
     local steps = 24
 
     local top = {60, 10}
@@ -511,7 +512,6 @@ local function DrawActions(parent, color)
     local bottom = {60, 110}
     local left = {10, 60}
 
-    -- Top-right curve.
     DrawBezier(
         parent,
         top,
@@ -523,7 +523,6 @@ local function DrawActions(parent, color)
         steps
     )
 
-    -- Bottom-right curve.
     DrawBezier(
         parent,
         right,
@@ -535,7 +534,6 @@ local function DrawActions(parent, color)
         steps
     )
 
-    -- Bottom-left curve.
     DrawBezier(
         parent,
         bottom,
@@ -547,7 +545,6 @@ local function DrawActions(parent, color)
         steps
     )
 
-    -- Top-left curve.
     DrawBezier(
         parent,
         left,
@@ -559,7 +556,6 @@ local function DrawActions(parent, color)
         steps
     )
 
-    -- Rounded tips.
     CurveDot(parent, 60, 10, color, thickness)
     CurveDot(parent, 110, 60, color, thickness)
     CurveDot(parent, 60, 110, color, thickness)
@@ -567,7 +563,7 @@ local function DrawActions(parent, color)
 end
 
 --==================================================
--- SERVERS - V42 PRESERVED
+-- SERVERS - UNCHANGED
 --==================================================
 
 local function DrawServers(parent, color)
@@ -598,71 +594,64 @@ local function DrawServers(parent, color)
 end
 
 --==================================================
--- SETTINGS - V43 EIGHT-TOOTH GEAR
+-- SETTINGS - V44 REBUILT EIGHT-TOOTH GEAR
 --==================================================
 
 local function DrawSettings(parent, color)
     local cx = 60
     local cy = 60
 
-    -- Eight symmetrical teeth.
     local teeth = 8
+    local toothWidth = 19
+    local toothLength = 25
 
-    -- Teeth are placed first so their inner ends
-    -- connect cleanly to the circular gear body.
+    -- Eight broad rectangular teeth.
+    -- Unlike V43, these are not radial line strokes.
 
     for i = 0, teeth - 1 do
-        local angle =
-            -math.pi / 2 + i * math.pi * 2 / teeth
+        local angle = i * (math.pi * 2 / teeth)
 
-        local dx = math.cos(angle)
-        local dy = math.sin(angle)
+        local radius = 36
 
-        local innerRadius = 32
-        local outerRadius = 46
+        local x = cx + math.sin(angle) * radius
+        local y = cy - math.cos(angle) * radius
 
-        local x1 = cx + dx * innerRadius
-        local y1 = cy + dy * innerRadius
+        local tooth = Create("Frame", {
+            AnchorPoint = Vector2.new(0.5, 0.5),
+            Position = UDim2.fromOffset(x, y),
+            Size = UDim2.fromOffset(
+                toothWidth,
+                toothLength
+            ),
+            Rotation = math.deg(angle),
+            BackgroundColor3 = color,
+            BorderSizePixel = 0
+        }, parent)
 
-        local x2 = cx + dx * outerRadius
-        local y2 = cy + dy * outerRadius
-
-        IconLine(
-            parent,
-            x1, y1,
-            x2, y2,
-            color,
-            17
-        )
+        Corner(tooth, 3)
     end
 
-    -- Circular gear body.
-    -- A single circular UIStroke avoids seams
-    -- between individual arc segments.
+    -- Solid circular gear body.
+    -- Teeth overlap this body to create
+    -- a continuous silhouette.
 
-    local ring = IconFrame(
+    IconCircle(
         parent,
-        cx - 34,
-        cy - 34,
-        68, 68,
-        color,
-        34
+        23, 23,
+        74,
+        color
     )
 
-    ring.BackgroundTransparency = 1
+    -- Circular center opening.
+    --
+    -- This uses a transparent circular stroke
+    -- so the center remains hollow rather than
+    -- introducing a solid background-colored mask.
 
-    Create("UIStroke", {
-        Color = color,
-        Thickness = 13,
-        ApplyStrokeMode = Enum.ApplyStrokeMode.Border
-    }, ring)
-
-    -- Perfectly centered circular opening.
-    local hole = IconCircle(
+    IconCircle(
         parent,
-        cx - 13,
-        cy - 13,
-        26,
+        46, 46,
+        28,
         color,
         8
     )
@@ -1688,7 +1677,7 @@ Brand.Size = UDim2.fromOffset(135, 25)
 
 local Version = Label(
     Sidebar,
-    "universal hub v43",
+    "universal hub v44",
     11,
     C.muted
 )
@@ -3409,7 +3398,7 @@ Sections.Settings = function()
 
     local title = Label(
         card,
-        "V43 Reference Icons",
+        "V44 GUI Icons",
         14,
         C.text,
         true
@@ -3430,7 +3419,7 @@ Sections.Settings = function()
 
     local description = Label(
         card,
-        "Reference geometry · no external assets",
+        "Thinner strokes · rebuilt gear",
         11,
         C.faint
     )
@@ -3438,7 +3427,7 @@ Sections.Settings = function()
     description.Position = UDim2.fromOffset(14, 55)
     description.Size = UDim2.new(1, -28, 0, 17)
 
-    AddEntry(card, "v43 icon system", "All")
+    AddEntry(card, "v44 icon system", "All")
 end
 
 --==================================================
@@ -3944,10 +3933,10 @@ _G.KHASTIFY_HUB_CLEANUP = function()
 end
 
 print("====================================")
-print("KHASTIFY'S UNIVERSAL HUB V43")
-print("REFERENCE-STYLE MICROPHONE")
-print("REFERENCE-STYLE DIAMOND SPARKLE")
-print("EIGHT-TOOTH SETTINGS GEAR")
+print("KHASTIFY'S UNIVERSAL HUB V44")
+print("THINNER ACTIONS ICON")
+print("THINNER MICROPHONE SUPPORT")
+print("REBUILT EIGHT-TOOTH GEAR")
 print("NATIVE ROBLOX GUI ICONS")
 print("AUTO EXECUTE PRESERVED")
 print("HTTP 429 HANDLING PRESERVED")
