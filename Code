@@ -1,26 +1,19 @@
 --[[
-    KHASTIFY'S UNIVERSAL HUB V44
+    KHASTIFY'S UNIVERSAL HUB V45
+    Native GUI icons, no external icon assets.
 
-    V44 ICON CHANGES:
-    - Actions: thinner four-point sparkle outline
-    - Voice Chat: thinner support arms and curved support
-    - Settings: redesigned eight-tooth gear
-
-    PRESERVED:
-    - Commands icon
-    - Players icon and adjusted front head
-    - Servers icon
-    - Auto Execute
-    - HTTP 429 handling
-    - Commands and movement features
-    - Player and server browsers
+    V45:
+    - Reference-style outlined 8-tooth Settings gear
+    - Reference-style target/arrow Actions icon
+    - Thinner Voice Chat arms with rounded ends
+    - Commands, Players, Servers icons retained
 
     K = Toggle Hub
     Q = Dash
 ]]
 
 --==================================================
--- SERVICES
+-- SERVICES / INITIALIZATION
 --==================================================
 
 local Players = game:GetService("Players")
@@ -37,31 +30,24 @@ if _G.KHASTIFY_HUB_CLEANUP then
     pcall(_G.KHASTIFY_HUB_CLEANUP)
 end
 
-local Parent = (gethui and gethui())
-    or LP:WaitForChild("PlayerGui")
-
+local Parent = (gethui and gethui()) or LP:WaitForChild("PlayerGui")
 local Old = Parent:FindFirstChild("KhastifyUniversalHub")
-
-if Old then
-    Old:Destroy()
-end
+if Old then Old:Destroy() end
 
 local Alive = true
 local Connections = {}
 
-local function Bind(signal, callback)
-    local connection = signal:Connect(callback)
+local function Bind(signal, fn)
+    local connection = signal:Connect(fn)
     table.insert(Connections, connection)
     return connection
 end
 
 local function Create(class, props, parent)
     local obj = Instance.new(class)
-
     for key, value in pairs(props or {}) do
         obj[key] = value
     end
-
     obj.Parent = parent
     return obj
 end
@@ -86,8 +72,7 @@ local function Label(parent, value, size, color, bold)
         BorderSizePixel = 0,
         Text = value,
         TextColor3 = color,
-        Font = bold and Enum.Font.GothamBold
-            or Enum.Font.Gotham,
+        Font = bold and Enum.Font.GothamBold or Enum.Font.Gotham,
         TextSize = size or 14,
         TextXAlignment = Enum.TextXAlignment.Left,
         TextYAlignment = Enum.TextYAlignment.Center,
@@ -105,7 +90,6 @@ local function Tween(obj, props, duration)
         ),
         props
     )
-
     tween:Play()
     return tween
 end
@@ -157,46 +141,14 @@ local function IconFrame(parent, x, y, w, h, color, radius)
         BorderSizePixel = 0
     }, parent)
 
-    if radius then
-        Corner(frame, radius)
-    end
-
+    if radius then Corner(frame, radius) end
     return frame
-end
-
-local function IconLine(parent, x1, y1, x2, y2, color, thickness)
-    local dx = x2 - x1
-    local dy = y2 - y1
-    local length = math.sqrt(dx * dx + dy * dy)
-
-    if length < 0.001 then
-        return
-    end
-
-    local line = Create("Frame", {
-        AnchorPoint = Vector2.new(0.5, 0.5),
-        Position = UDim2.fromOffset(
-            (x1 + x2) / 2,
-            (y1 + y2) / 2
-        ),
-        Size = UDim2.fromOffset(length, thickness),
-        Rotation = math.deg(math.atan2(dy, dx)),
-        BackgroundColor3 = color,
-        BorderSizePixel = 0
-    }, parent)
-
-    Corner(line, thickness / 2)
-
-    return line
 end
 
 local function IconCircle(parent, x, y, diameter, color, thickness)
     local circle = IconFrame(
-        parent,
-        x, y,
-        diameter, diameter,
-        color,
-        diameter / 2
+        parent, x, y, diameter, diameter,
+        color, diameter / 2
     )
 
     if thickness then
@@ -208,385 +160,266 @@ local function IconCircle(parent, x, y, diameter, color, thickness)
 end
 
 local function IconOutline(parent, x, y, w, h, color, thickness, radius)
-    local frame = IconFrame(
-        parent,
-        x, y, w, h,
-        color,
-        radius or 8
-    )
-
+    local frame = IconFrame(parent, x, y, w, h, color, radius or 8)
     frame.BackgroundTransparency = 1
     Stroke(frame, color, thickness)
-
     return frame
 end
 
---==================================================
--- CURVE ENGINE
---==================================================
-
-local function CurveSegment(
-    parent,
-    x1, y1,
-    x2, y2,
-    color,
-    thickness
-)
-    local dx = x2 - x1
-    local dy = y2 - y1
+local function IconLine(parent, x1, y1, x2, y2, color, thickness)
+    local dx, dy = x2 - x1, y2 - y1
     local length = math.sqrt(dx * dx + dy * dy)
+    if length < 0.001 then return end
 
-    if length < 0.001 then
-        return
-    end
-
-    local overlap = 1.1
-
-    local ux = dx / length
-    local uy = dy / length
-
-    local ax = x1 - ux * overlap
-    local ay = y1 - uy * overlap
-
-    local bx = x2 + ux * overlap
-    local by = y2 + uy * overlap
-
-    local frame = Create("Frame", {
+    local line = Create("Frame", {
         AnchorPoint = Vector2.new(0.5, 0.5),
-        Position = UDim2.fromOffset(
-            (ax + bx) / 2,
-            (ay + by) / 2
-        ),
-        Size = UDim2.fromOffset(
-            length + overlap * 2,
-            thickness
-        ),
+        Position = UDim2.fromOffset((x1+x2)/2, (y1+y2)/2),
+        Size = UDim2.fromOffset(length, thickness),
         Rotation = math.deg(math.atan2(dy, dx)),
         BackgroundColor3 = color,
         BorderSizePixel = 0
     }, parent)
 
-    return frame
+    Corner(line, thickness / 2)
+    return line
 end
 
-local function CurveDot(parent, x, y, color, diameter)
+-- Continuous-looking native GUI stroke.
+-- Each line overlaps its neighbor slightly.
+local function PathLine(parent, x1, y1, x2, y2, color, thickness)
+    local dx, dy = x2-x1, y2-y1
+    local length = math.sqrt(dx*dx + dy*dy)
+    if length < 0.001 then return end
+
+    local overlap = 0.75
+    local ux, uy = dx/length, dy/length
+
+    local ax = x1 - ux*overlap
+    local ay = y1 - uy*overlap
+    local bx = x2 + ux*overlap
+    local by = y2 + uy*overlap
+
+    return Create("Frame", {
+        AnchorPoint = Vector2.new(0.5, 0.5),
+        Position = UDim2.fromOffset((ax+bx)/2, (ay+by)/2),
+        Size = UDim2.fromOffset(length+overlap*2, thickness),
+        Rotation = math.deg(math.atan2(dy, dx)),
+        BackgroundColor3 = color,
+        BorderSizePixel = 0
+    }, parent)
+end
+
+local function PathDot(parent, x, y, color, diameter)
     return IconCircle(
         parent,
-        x - diameter / 2,
-        y - diameter / 2,
+        x-diameter/2,
+        y-diameter/2,
         diameter,
         color
     )
 end
 
-local function BezierValue(a, b, c, d, t)
-    local u = 1 - t
+local function DrawPath(parent, points, color, thickness, closed, rounded)
+    for i = 1, #points - 1 do
+        local a, b = points[i], points[i+1]
+        PathLine(parent, a[1], a[2], b[1], b[2], color, thickness)
+    end
 
-    return
-        a * u * u * u
-        + 3 * b * u * u * t
-        + 3 * c * u * t * t
-        + d * t * t * t
-end
+    if closed and #points > 2 then
+        local a, b = points[#points], points[1]
+        PathLine(parent, a[1], a[2], b[1], b[2], color, thickness)
+    end
 
-local function DrawBezier(
-    parent,
-    p0, p1, p2, p3,
-    color,
-    thickness,
-    steps
-)
-    local previousX = p0[1]
-    local previousY = p0[2]
-
-    for i = 1, steps do
-        local t = i / steps
-
-        local x = BezierValue(
-            p0[1], p1[1], p2[1], p3[1], t
-        )
-
-        local y = BezierValue(
-            p0[2], p1[2], p2[2], p3[2], t
-        )
-
-        CurveSegment(
-            parent,
-            previousX, previousY,
-            x, y,
-            color,
-            thickness
-        )
-
-        previousX = x
-        previousY = y
+    if rounded then
+        for _, p in ipairs(points) do
+            PathDot(parent, p[1], p[2], color, thickness)
+        end
     end
 end
 
 local function DrawArc(
-    parent,
-    cx, cy,
-    rx, ry,
-    startAngle,
-    endAngle,
-    color,
-    thickness,
-    steps
+    parent, cx, cy, rx, ry,
+    startAngle, endAngle, color, thickness, steps
 )
-    local previousX
-    local previousY
+    local points = {}
 
     for i = 0, steps do
         local angle = startAngle
-            + (endAngle - startAngle) * i / steps
+            + (endAngle-startAngle)*i/steps
 
-        local x = cx + math.cos(angle) * rx
-        local y = cy + math.sin(angle) * ry
-
-        if previousX then
-            CurveSegment(
-                parent,
-                previousX, previousY,
-                x, y,
-                color,
-                thickness
-            )
-        end
-
-        previousX = x
-        previousY = y
+        points[#points+1] = {
+            cx + math.cos(angle)*rx,
+            cy + math.sin(angle)*ry
+        }
     end
+
+    DrawPath(parent, points, color, thickness, false, false)
+    return points
 end
 
 --==================================================
--- COMMANDS - UNCHANGED
+-- COMMANDS ICON - V44
 --==================================================
 
 local function DrawCommands(parent, color)
     IconOutline(parent, 15, 23, 90, 74, color, 8, 12)
-
     IconLine(parent, 32, 45, 48, 60, color, 9)
     IconLine(parent, 48, 60, 32, 75, color, 9)
     IconLine(parent, 57, 76, 84, 76, color, 9)
 end
 
 --==================================================
--- VOICE CHAT - V44
+-- VOICE CHAT ICON - V45
 --==================================================
 
 local function DrawVoice(parent, color)
-    -- Original microphone capsule retained.
+    -- Preserve microphone capsule.
+    IconFrame(parent, 43, 13, 34, 60, color, 17)
 
-    IconFrame(
-        parent,
-        43, 13,
-        34, 60,
-        color,
-        17
-    )
+    -- V45: thinner, symmetrical support.
+    local thickness = 5
 
-    -- V44: thinner U-shaped support.
-
-    local supportThickness = 6
-
+    -- U-shaped support.
     DrawArc(
         parent,
-        60, 66,
+        60, 65,
         31, 31,
-        0,
-        math.pi,
-        color,
-        supportThickness,
-        48
+        0, math.pi,
+        color, thickness, 64
     )
 
-    -- Left arm.
-    IconFrame(
-        parent,
-        26, 48,
-        supportThickness, 21,
-        color,
-        3
-    )
+    -- Rounded vertical support arms.
+    IconFrame(parent, 26.5, 48, thickness, 19, color, 2.5)
+    IconFrame(parent, 88.5, 48, thickness, 19, color, 2.5)
 
-    -- Right arm.
-    IconFrame(
-        parent,
-        88, 48,
-        supportThickness, 21,
-        color,
-        3
-    )
+    -- Rounded upper ends.
+    PathDot(parent, 29, 48, color, thickness)
+    PathDot(parent, 91, 48, color, thickness)
 
-    -- Connections use the same thickness.
-    CurveDot(
-        parent,
-        29, 66,
-        color,
-        supportThickness
-    )
+    -- Support connections.
+    PathDot(parent, 29, 65, color, thickness)
+    PathDot(parent, 91, 65, color, thickness)
 
-    CurveDot(
-        parent,
-        91, 66,
-        color,
-        supportThickness
-    )
+    -- Centered stem, matching support thickness.
+    IconFrame(parent, 57.5, 94, thickness, 16, color, 2.5)
 
-    -- Slightly thinner centered stem.
-    IconFrame(
-        parent,
-        57, 95,
-        6, 15,
-        color,
-        3
-    )
-
-    -- Symmetrical base.
-    IconFrame(
-        parent,
-        43, 106,
-        34, 7,
-        color,
-        3.5
-    )
+    -- Bottom stand: same thickness as support arms.
+    IconFrame(parent, 42, 106, 36, thickness, color, 2.5)
 end
 
 --==================================================
--- PLAYERS - V42 POSITION PRESERVED
+-- PLAYERS ICON - V44
 --==================================================
 
 local function DrawPlayers(parent, color)
     IconCircle(parent, 76, 20, 25, color, 7)
-
-    IconOutline(
-        parent,
-        57, 55,
-        51, 43,
-        color, 7, 16
-    )
+    IconOutline(parent, 57, 55, 51, 43, color, 7, 16)
 
     local mask = IconFrame(
-        parent,
-        14, 54,
-        68, 53,
-        C.side,
-        18
+        parent, 14, 54, 68, 53, C.side, 18
     )
-
     mask.ZIndex = 3
 
     local body = IconOutline(
-        parent,
-        14, 54,
-        68, 53,
-        color, 7, 18
+        parent, 14, 54, 68, 53, color, 7, 18
     )
-
     body.ZIndex = 4
 
-    local head = IconCircle(
-        parent,
-        33, 11,
-        34,
-        color,
-        7
-    )
-
+    -- Approved one-pixel head adjustment.
+    local head = IconCircle(parent, 33, 11, 34, color, 7)
     head.ZIndex = 5
 end
 
 --==================================================
--- ACTIONS - V44 THINNER LINES
+-- ACTIONS ICON - V45 TARGET / CURSOR
 --==================================================
 
 local function DrawActions(parent, color)
-    -- Approved V43 geometry retained.
-    -- V44 reduces stroke thickness only.
+    -- Based on the user's reference:
+    -- Two open circular arcs with a diagonal arrow.
+    --
+    -- Geometry uses a 120x120 coordinate system.
 
-    local thickness = 8
-    local steps = 24
+    local outerThickness = 8
+    local innerThickness = 8
 
-    local top = {60, 10}
-    local right = {110, 60}
-    local bottom = {60, 110}
-    local left = {10, 60}
-
-    DrawBezier(
+    -- Outer ring: open in lower-left.
+    -- Starts at left-upper region and travels clockwise
+    -- around the top, right, and lower-right.
+    DrawArc(
         parent,
-        top,
-        {73, 43},
-        {77, 47},
-        right,
+        60, 60,
+        43, 43,
+        math.rad(190),
+        math.rad(450),
         color,
-        thickness,
-        steps
+        outerThickness,
+        88
     )
 
-    DrawBezier(
+    -- Inner ring: matching opening near the arrow.
+    DrawArc(
         parent,
-        right,
-        {77, 73},
-        {73, 77},
-        bottom,
+        60, 60,
+        27, 27,
+        math.rad(192),
+        math.rad(450),
         color,
-        thickness,
-        steps
+        innerThickness,
+        72
     )
 
-    DrawBezier(
+    -- Diagonal arrow, pointing toward the upper right.
+    -- Filled shaft.
+    local arrowThickness = 15
+
+    IconLine(
         parent,
-        bottom,
-        {47, 77},
-        {43, 73},
-        left,
+        25, 95,
+        65, 55,
         color,
-        thickness,
-        steps
+        arrowThickness
     )
 
-    DrawBezier(
+    -- Arrowhead constructed from connected thick arms.
+    IconLine(
         parent,
-        left,
-        {43, 47},
-        {47, 43},
-        top,
+        65, 55,
+        41, 55,
         color,
-        thickness,
-        steps
+        arrowThickness
     )
 
-    CurveDot(parent, 60, 10, color, thickness)
-    CurveDot(parent, 110, 60, color, thickness)
-    CurveDot(parent, 60, 110, color, thickness)
-    CurveDot(parent, 10, 60, color, thickness)
+    IconLine(
+        parent,
+        65, 55,
+        65, 79,
+        color,
+        arrowThickness
+    )
+
+    -- Solid square connection at the arrowhead.
+    IconFrame(
+        parent,
+        57, 48,
+        16, 16,
+        color,
+        2
+    )
+
+    -- Rounded shaft end.
+    PathDot(parent, 25, 95, color, arrowThickness)
 end
 
 --==================================================
--- SERVERS - UNCHANGED
+-- SERVERS ICON - V44
 --==================================================
 
 local function DrawServers(parent, color)
     local function Rack(y)
-        IconOutline(
-            parent,
-            13, y,
-            94, 35,
-            color, 8, 10
-        )
-
-        IconCircle(
-            parent,
-            28, y + 13,
-            9, color
-        )
-
-        IconLine(
-            parent,
-            65, y + 18,
-            88, y + 18,
-            color, 8
-        )
+        IconOutline(parent, 13, y, 94, 35, color, 8, 10)
+        IconCircle(parent, 28, y+13, 9, color)
+        IconLine(parent, 65, y+18, 88, y+18, color, 8)
     end
 
     Rack(19)
@@ -594,66 +427,76 @@ local function DrawServers(parent, color)
 end
 
 --==================================================
--- SETTINGS - V44 REBUILT EIGHT-TOOTH GEAR
+-- SETTINGS ICON - V45 REFERENCE GEAR
 --==================================================
 
 local function DrawSettings(parent, color)
-    local cx = 60
-    local cy = 60
+    -- Outlined eight-tooth gear.
+    --
+    -- The center is genuinely hollow:
+    -- no solid background-colored masking circle.
+    --
+    -- Outer geometry is generated as one closed
+    -- contour, rather than a solid disk with spokes.
 
+    local cx, cy = 60, 60
     local teeth = 8
-    local toothWidth = 19
-    local toothLength = 25
+    local thickness = 5.2
 
-    -- Eight broad rectangular teeth.
-    -- Unlike V43, these are not radial line strokes.
+    -- Reference-inspired radii.
+    local valleyRadius = 43
+    local shoulderRadius = 46
+    local tipRadius = 54
 
-    for i = 0, teeth - 1 do
-        local angle = i * (math.pi * 2 / teeth)
+    local points = {}
 
-        local radius = 36
+    -- Each tooth has a flat outer edge, sloping
+    -- shoulders, and a rounded-looking transition.
+    for tooth = 0, teeth-1 do
+        local centerAngle =
+            -math.pi/2 + tooth*(math.pi*2/teeth)
 
-        local x = cx + math.sin(angle) * radius
-        local y = cy - math.cos(angle) * radius
+        local profile = {
+            {-0.392, valleyRadius},
+            {-0.320, valleyRadius},
+            {-0.260, shoulderRadius},
+            {-0.205, tipRadius},
+            {-0.105, tipRadius},
+            { 0.105, tipRadius},
+            { 0.205, tipRadius},
+            { 0.260, shoulderRadius},
+            { 0.320, valleyRadius},
+            { 0.392, valleyRadius}
+        }
 
-        local tooth = Create("Frame", {
-            AnchorPoint = Vector2.new(0.5, 0.5),
-            Position = UDim2.fromOffset(x, y),
-            Size = UDim2.fromOffset(
-                toothWidth,
-                toothLength
-            ),
-            Rotation = math.deg(angle),
-            BackgroundColor3 = color,
-            BorderSizePixel = 0
-        }, parent)
+        for _, item in ipairs(profile) do
+            local angle = centerAngle + item[1]
+            local radius = item[2]
 
-        Corner(tooth, 3)
+            points[#points+1] = {
+                cx + math.cos(angle)*radius,
+                cy + math.sin(angle)*radius
+            }
+        end
     end
 
-    -- Solid circular gear body.
-    -- Teeth overlap this body to create
-    -- a continuous silhouette.
-
-    IconCircle(
+    -- Outer contour.
+    DrawPath(
         parent,
-        23, 23,
-        74,
-        color
+        points,
+        color,
+        thickness,
+        true,
+        true
     )
 
-    -- Circular center opening.
-    --
-    -- This uses a transparent circular stroke
-    -- so the center remains hollow rather than
-    -- introducing a solid background-colored mask.
-
+    -- Large, centered hollow circular opening.
     IconCircle(
         parent,
-        46, 46,
-        28,
+        33, 33,
+        54,
         color,
-        8
+        6
     )
 end
 
@@ -682,10 +525,7 @@ local function DrawIcon(parent, kind, color)
 
     local canvas = Create("Frame", {
         Name = "IconCanvas",
-        Size = UDim2.fromOffset(
-            ICON_SIZE,
-            ICON_SIZE
-        ),
+        Size = UDim2.fromOffset(ICON_SIZE, ICON_SIZE),
         BackgroundTransparency = 1,
         BorderSizePixel = 0
     }, holder)
@@ -695,7 +535,6 @@ local function DrawIcon(parent, kind, color)
     }, canvas)
 
     local drawer = IconDrawers[kind]
-
     if drawer then
         drawer(canvas, color or C.muted)
     end
@@ -716,10 +555,7 @@ local function DrawSearchIcon(parent)
         BackgroundTransparency = 1
     }, holder)
 
-    Create("UICorner", {
-        CornerRadius = UDim.new(1, 0)
-    }, circle)
-
+    Corner(circle, 6)
     Stroke(circle, C.muted, 1.8)
 
     local handle = Create("Frame", {
@@ -735,7 +571,7 @@ local function DrawSearchIcon(parent)
 end
 
 --==================================================
--- SETTINGS
+-- SAVED SETTINGS
 --==================================================
 
 local State = {
@@ -759,38 +595,25 @@ local State = {
     uiY = 0.5
 }
 
-local Keybinds = {
-    Dash = "Q"
-}
-
+local Keybinds = {Dash = "Q"}
 local SaveFile = "KHASTIFY_Universal_Hub_Settings.json"
 
 local function ReadJSON(filename)
-    if type(readfile) ~= "function" then
-        return nil
-    end
+    if type(readfile) ~= "function" then return nil end
 
     local ok, data = pcall(function()
         return HttpService:JSONDecode(readfile(filename))
     end)
 
-    if ok and type(data) == "table" then
-        return data
-    end
-
+    if ok and type(data) == "table" then return data end
     return nil
 end
 
 local function WriteJSON(filename, data)
-    if type(writefile) ~= "function" then
-        return false
-    end
+    if type(writefile) ~= "function" then return false end
 
     return pcall(function()
-        writefile(
-            filename,
-            HttpService:JSONEncode(data)
-        )
+        writefile(filename, HttpService:JSONEncode(data))
     end)
 end
 
@@ -801,7 +624,6 @@ do
         for key, value in pairs(saved.state or saved) do
             if State[key] ~= nil
                 and type(value) == type(State[key]) then
-
                 State[key] = value
             end
         end
@@ -848,7 +670,6 @@ local QueueTeleport =
 local function LoaderSource()
     return [[
 repeat task.wait() until game:IsLoaded()
-
 local Players = game:GetService("Players")
 repeat task.wait() until Players.LocalPlayer
 
@@ -873,16 +694,12 @@ end
 local function InstallStartupLoader()
     if type(writefile) ~= "function"
         or type(isfolder) ~= "function" then
-
         return false
     end
 
     for _, folder in ipairs({"autoexec", "Autoexec"}) do
         local exists = false
-
-        pcall(function()
-            exists = isfolder(folder)
-        end)
+        pcall(function() exists = isfolder(folder) end)
 
         if exists then
             local ok = pcall(function()
@@ -903,9 +720,7 @@ local function InstallStartupLoader()
 end
 
 local function RemoveStartupLoader()
-    if type(delfile) ~= "function" then
-        return
-    end
+    if type(delfile) ~= "function" then return end
 
     for _, folder in ipairs({"autoexec", "Autoexec"}) do
         local path = folder .. "/" .. AUTOEXEC_FILENAME
@@ -921,13 +736,8 @@ local function RemoveStartupLoader()
 end
 
 local function QueueNextTeleport()
-    if not State.autoExecute then
-        return false
-    end
-
-    if type(QueueTeleport) ~= "function" then
-        return false
-    end
+    if not State.autoExecute then return false end
+    if type(QueueTeleport) ~= "function" then return false end
 
     local ok = pcall(function()
         QueueTeleport(LoaderSource())
@@ -946,8 +756,7 @@ local function ConfigureAutoExecute(enabled)
         local teleport = QueueNextTeleport()
 
         if startup and teleport then
-            AutoExecute.status =
-                "Startup and teleport enabled"
+            AutoExecute.status = "Startup and teleport enabled"
         elseif startup then
             AutoExecute.status = "Startup enabled"
         elseif teleport then
@@ -982,7 +791,6 @@ local function Noclip()
             if Collisions[part] == nil then
                 Collisions[part] = part.CanCollide
             end
-
             part.CanCollide = false
         end
     end
@@ -994,7 +802,6 @@ local function RestoreCollision()
             part.CanCollide = value
         end
     end
-
     table.clear(Collisions)
 end
 
@@ -1005,14 +812,10 @@ local function StopFly()
     if FlyVelocity then FlyVelocity:Destroy() end
     if FlyGyro then FlyGyro:Destroy() end
 
-    FlyVelocity = nil
-    FlyGyro = nil
+    FlyVelocity, FlyGyro = nil, nil
 
     local h = Hum()
-
-    if h then
-        h.PlatformStand = false
-    end
+    if h then h.PlatformStand = false end
 end
 
 local function StartFly()
@@ -1051,22 +854,16 @@ local AirPlatform
 local AirHeight
 
 local function StopAirWalk()
-    if AirPlatform then
-        AirPlatform:Destroy()
-    end
-
-    AirPlatform = nil
-    AirHeight = nil
+    if AirPlatform then AirPlatform:Destroy() end
+    AirPlatform, AirHeight = nil, nil
 end
 
 local function StartAirWalk()
     StopAirWalk()
-
     local r = Root()
     if not r then return end
 
     AirHeight = r.Position.Y - 3.2
-
     AirPlatform = Platform(
         "KHASTIFY_AirWalk",
         Vector3.new(10, 0.5, 10)
@@ -1076,24 +873,16 @@ end
 local function Dash()
     local r = Root()
     local camera = workspace.CurrentCamera
-
     if not r or not camera then return end
 
-    local direction = camera.CFrame.LookVector
+    local d = camera.CFrame.LookVector
+    d = Vector3.new(d.X, 0, d.Z)
 
-    direction = Vector3.new(
-        direction.X,
-        0,
-        direction.Z
-    )
+    if d.Magnitude < 0.01 then return end
 
-    if direction.Magnitude < 0.01 then return end
-
-    local velocity = r.AssemblyLinearVelocity
-
+    local v = r.AssemblyLinearVelocity
     r.AssemblyLinearVelocity =
-        direction.Unit * State.dashPower
-        + Vector3.new(0, velocity.Y, 0)
+        d.Unit * State.dashPower + Vector3.new(0, v.Y, 0)
 end
 
 --==================================================
@@ -1102,17 +891,14 @@ end
 
 local OFFSET = 11
 local InvisibleActive = false
-
 local VisualAvatar
 local InvisibleFloor
-
 local PartPairs = {}
 local Transparency = {}
 
 local OriginalCameraSubject
 local OriginalCameraType
 local OriginalCameraOffset
-
 local LastGroundY
 
 local function RestoreTransparency()
@@ -1121,7 +907,6 @@ local function RestoreTransparency()
             part.LocalTransparencyModifier = value
         end
     end
-
     table.clear(Transparency)
 end
 
@@ -1129,9 +914,7 @@ local function DestroyInvisible()
     if VisualAvatar then VisualAvatar:Destroy() end
     if InvisibleFloor then InvisibleFloor:Destroy() end
 
-    VisualAvatar = nil
-    InvisibleFloor = nil
-
+    VisualAvatar, InvisibleFloor = nil, nil
     table.clear(PartPairs)
 end
 
@@ -1147,16 +930,13 @@ local function PartPath(obj, ancestor)
                 and sibling.ClassName == current.ClassName then
 
                 index += 1
-
                 if sibling == current then break end
             end
         end
 
         table.insert(
-            pieces,
-            1,
-            current.ClassName .. ":"
-                .. current.Name .. ":" .. index
+            pieces, 1,
+            current.ClassName .. ":" .. current.Name .. ":" .. index
         )
 
         current = current.Parent
@@ -1172,10 +952,7 @@ local function MakeVisual()
     local archivable = c.Archivable
     c.Archivable = true
 
-    local ok, clone = pcall(function()
-        return c:Clone()
-    end)
-
+    local ok, clone = pcall(function() return c:Clone() end)
     c.Archivable = archivable
 
     if not ok or not clone then return nil end
@@ -1189,7 +966,6 @@ local function MakeVisual()
         elseif obj:IsA("JointInstance")
             or obj:IsA("WeldConstraint")
             or obj:IsA("Constraint") then
-
             obj:Destroy()
 
         elseif obj:IsA("BasePart") then
@@ -1203,22 +979,15 @@ local function MakeVisual()
             if obj.Name == "HumanoidRootPart" then
                 obj.Transparency = 1
             else
-                obj.Transparency = math.max(
-                    obj.Transparency,
-                    0.3
-                )
+                obj.Transparency = math.max(obj.Transparency, 0.3)
             end
 
         elseif obj:IsA("Decal") or obj:IsA("Texture") then
-            obj.Transparency = math.max(
-                obj.Transparency,
-                0.3
-            )
+            obj.Transparency = math.max(obj.Transparency, 0.3)
 
         elseif obj:IsA("ParticleEmitter")
             or obj:IsA("Trail")
             or obj:IsA("Beam") then
-
             obj.Enabled = false
         end
     end
@@ -1255,7 +1024,6 @@ local function GroundAt(x, z, referenceY)
     params.FilterType = Enum.RaycastFilterType.Exclude
 
     local excluded = {}
-
     if Char() then table.insert(excluded, Char()) end
     if VisualAvatar then table.insert(excluded, VisualAvatar) end
     if InvisibleFloor then table.insert(excluded, InvisibleFloor) end
@@ -1283,9 +1051,7 @@ local function SetBodyY(y)
     local delta = y - r.Position.Y
 
     if math.abs(delta) > 0.001 then
-        c:PivotTo(
-            c:GetPivot() + Vector3.new(0, delta, 0)
-        )
+        c:PivotTo(c:GetPivot() + Vector3.new(0, delta, 0))
     end
 end
 
@@ -1301,11 +1067,8 @@ local function RestoreCamera()
         camera.CameraType =
             OriginalCameraType or Enum.CameraType.Custom
 
-        if OriginalCameraSubject
-            and OriginalCameraSubject.Parent then
-
+        if OriginalCameraSubject and OriginalCameraSubject.Parent then
             camera.CameraSubject = OriginalCameraSubject
-
         elseif h then
             camera.CameraSubject = h
         end
@@ -1317,9 +1080,7 @@ local function RestoreCamera()
 end
 
 local function MirrorAvatar()
-    if not InvisibleActive or not VisualAvatar then
-        return
-    end
+    if not InvisibleActive or not VisualAvatar then return end
 
     local offset = Vector3.new(0, OFFSET, 0)
 
@@ -1337,9 +1098,7 @@ local function SetInvisible(enabled)
 
     if not enabled then
         if InvisibleActive and c then
-            c:PivotTo(
-                c:GetPivot() + Vector3.new(0, OFFSET, 0)
-            )
+            c:PivotTo(c:GetPivot() + Vector3.new(0, OFFSET, 0))
 
             if r then
                 r.AssemblyLinearVelocity = Vector3.zero
@@ -1348,25 +1107,18 @@ local function SetInvisible(enabled)
         end
 
         InvisibleActive = false
-
         RestoreCamera()
         DestroyInvisible()
         RestoreTransparency()
 
-        if not State.noclip then
-            RestoreCollision()
-        end
-
+        if not State.noclip then RestoreCollision() end
         LastGroundY = nil
         return
     end
 
-    if InvisibleActive or not c or not r or not h then
-        return
-    end
+    if InvisibleActive or not c or not r or not h then return end
 
     local clone = MakeVisual()
-
     if not clone then
         State.invisible = false
         return
@@ -1382,9 +1134,7 @@ local function SetInvisible(enabled)
     OriginalCameraOffset = h.CameraOffset
 
     LastGroundY = GroundAt(
-        r.Position.X,
-        r.Position.Z,
-        r.Position.Y
+        r.Position.X, r.Position.Z, r.Position.Y
     ) or (r.Position.Y - 3.2)
 
     for _, part in ipairs(c:GetDescendants()) do
@@ -1394,10 +1144,7 @@ local function SetInvisible(enabled)
     end
 
     Noclip()
-
-    c:PivotTo(
-        c:GetPivot() + Vector3.new(0, -OFFSET, 0)
-    )
+    c:PivotTo(c:GetPivot() + Vector3.new(0, -OFFSET, 0))
 
     r.AssemblyLinearVelocity = Vector3.zero
     r.AssemblyAngularVelocity = Vector3.zero
@@ -1419,7 +1166,6 @@ local function SetInvisible(enabled)
     if camera then
         camera.CameraType = Enum.CameraType.Custom
         camera.CameraSubject = h
-
         h.CameraOffset =
             OriginalCameraOffset + Vector3.new(0, OFFSET, 0)
     end
@@ -1434,19 +1180,13 @@ local function UpdateInvisible()
     Noclip()
 
     local p = r.Position
-
-    local ground = GroundAt(
-        p.X,
-        p.Z,
-        p.Y + OFFSET
-    )
+    local ground = GroundAt(p.X, p.Z, p.Y + OFFSET)
 
     if ground then
         local difference = ground - LastGroundY
 
         if (difference >= 0 and difference <= 3.5)
             or (difference < 0 and difference >= -5) then
-
             SetBodyY(r.Position.Y + difference)
             LastGroundY = ground
         end
@@ -1458,9 +1198,7 @@ local function UpdateInvisible()
 
     if InvisibleFloor then
         InvisibleFloor.Position = Vector3.new(
-            p.X,
-            floorY - 0.25,
-            p.Z
+            p.X, floorY - 0.25, p.Z
         )
     end
 
@@ -1472,22 +1210,16 @@ local function UpdateInvisible()
             SetBodyY(minimumY)
 
             local v = r.AssemblyLinearVelocity
-
             r.AssemblyLinearVelocity = Vector3.new(
-                v.X,
-                math.max(0, v.Y),
-                v.Z
+                v.X, math.max(0, v.Y), v.Z
             )
 
         elseif r.Position.Y > maximumY then
             SetBodyY(maximumY)
 
             local v = r.AssemblyLinearVelocity
-
             r.AssemblyLinearVelocity = Vector3.new(
-                v.X,
-                math.min(0, v.Y),
-                v.Z
+                v.X, math.min(0, v.Y), v.Z
             )
         end
     end
@@ -1503,13 +1235,11 @@ local HeadDecals = {}
 local function SetHeadless(enabled)
     local c = Char()
     local head = c and c:FindFirstChild("Head")
-
     if not head then return end
 
     if enabled then
         if HeadTransparency[head] == nil then
-            HeadTransparency[head] =
-                head.LocalTransparencyModifier
+            HeadTransparency[head] = head.LocalTransparencyModifier
         end
 
         head.LocalTransparencyModifier = 1
@@ -1519,7 +1249,6 @@ local function SetHeadless(enabled)
                 if HeadDecals[obj] == nil then
                     HeadDecals[obj] = obj.Transparency
                 end
-
                 obj.Transparency = 1
             end
         end
@@ -1531,9 +1260,7 @@ local function SetHeadless(enabled)
         end
 
         for obj, value in pairs(HeadDecals) do
-            if obj.Parent then
-                obj.Transparency = value
-            end
+            if obj.Parent then obj.Transparency = value end
         end
 
         table.clear(HeadTransparency)
@@ -1564,7 +1291,7 @@ local function Unstuck()
 
     State.freeze = false
     r.Anchored = false
-    r.CFrame = r.CFrame + Vector3.new(0, 6, 0)
+    r.CFrame += Vector3.new(0, 6, 0)
     r.AssemblyLinearVelocity = Vector3.zero
 end
 
@@ -1578,21 +1305,15 @@ local function SelfFling()
     if not r then return end
 
     r.AssemblyLinearVelocity = Vector3.new(
-        math.random(-120, 120),
-        100,
-        math.random(-120, 120)
+        math.random(-120, 120), 100, math.random(-120, 120)
     )
-
     r.AssemblyAngularVelocity = Vector3.new(15, 20, 15)
 end
 
 local function Wave()
     local h = Hum()
-
     if h then
-        pcall(function()
-            h:PlayEmote("wave")
-        end)
+        pcall(function() h:PlayEmote("wave") end)
     end
 end
 
@@ -1627,18 +1348,14 @@ local GUI = Create("ScreenGui", {
     ZIndexBehavior = Enum.ZIndexBehavior.Sibling
 }, Parent)
 
-local WIDTH = 590
-local HEIGHT = 610
-local SIDE = 174
+local WIDTH, HEIGHT, SIDE = 590, 610, 174
 
 local Window = Create("Frame", {
     Name = "Window",
     Size = UDim2.fromOffset(WIDTH, HEIGHT),
     Position = UDim2.new(
-        State.uiX,
-        -WIDTH / 2,
-        State.uiY,
-        -HEIGHT / 2
+        State.uiX, -WIDTH/2,
+        State.uiY, -HEIGHT/2
     ),
     BackgroundColor3 = C.bg,
     BorderSizePixel = 0,
@@ -1659,14 +1376,14 @@ Corner(Sidebar, 17)
 
 Create("Frame", {
     Position = UDim2.new(1, -18, 0, 0),
-    Size = UDim2.new(0, 18, 1, 0),
+    Size = UDim2.fromOffset(18, HEIGHT),
     BackgroundColor3 = C.side,
     BorderSizePixel = 0
 }, Sidebar)
 
 Create("Frame", {
     Position = UDim2.new(1, -1, 0, 0),
-    Size = UDim2.new(0, 1, 1, 0),
+    Size = UDim2.fromOffset(1, HEIGHT),
     BackgroundColor3 = C.border,
     BorderSizePixel = 0
 }, Sidebar)
@@ -1675,13 +1392,7 @@ local Brand = Label(Sidebar, "KHASTIFY", 16, C.text, true)
 Brand.Position = UDim2.fromOffset(24, 31)
 Brand.Size = UDim2.fromOffset(135, 25)
 
-local Version = Label(
-    Sidebar,
-    "universal hub v44",
-    11,
-    C.muted
-)
-
+local Version = Label(Sidebar, "universal hub v45", 11, C.muted)
 Version.Position = UDim2.fromOffset(24, 57)
 Version.Size = UDim2.fromOffset(135, 19)
 
@@ -1702,14 +1413,7 @@ local HeadingIcon = Create("Frame", {
     BackgroundTransparency = 1
 }, Topbar)
 
-local Heading = Label(
-    Topbar,
-    "commands",
-    18,
-    C.text,
-    true
-)
-
+local Heading = Label(Topbar, "commands", 18, C.text, true)
 Heading.Position = UDim2.fromOffset(55, 15)
 Heading.Size = UDim2.new(1, -148, 0, 30)
 
@@ -1803,8 +1507,7 @@ Bind(
     ListLayout:GetPropertyChangedSignal("AbsoluteContentSize"),
     function()
         List.CanvasSize = UDim2.fromOffset(
-            0,
-            ListLayout.AbsoluteContentSize.Y + 20
+            0, ListLayout.AbsoluteContentSize.Y + 20
         )
     end
 )
@@ -1829,8 +1532,8 @@ for i, entry in ipairs(Navigation) do
     local name, kind = entry[1], entry[2]
 
     local y = name == "Settings"
-        and HEIGHT - 64
-        or 105 + (i - 1) * 51
+        and HEIGHT-64
+        or 105+(i-1)*51
 
     local button = Create("TextButton", {
         Position = UDim2.fromOffset(12, y),
@@ -1850,7 +1553,6 @@ for i, entry in ipairs(Navigation) do
     }, button)
 
     local textLabel = Label(button, name, 16, C.muted)
-
     textLabel.Position = UDim2.fromOffset(52, -1)
     textLabel.Size = UDim2.new(1, -60, 1, 0)
 
@@ -1907,7 +1609,6 @@ local function UpdateHeadingIcon(name)
     end
 
     local data = NavButtons[name]
-
     if data then
         DrawIcon(HeadingIcon, data.kind, C.purple)
     end
@@ -1919,7 +1620,6 @@ end
 
 local Commands = {}
 local KeybindButtons = {}
-
 local WaitingForBind
 local ChangingMenuKey = false
 
@@ -1932,17 +1632,13 @@ local ShowSection
 
 local function ClearList()
     for _, obj in ipairs(List:GetChildren()) do
-        if obj ~= ListLayout
-            and not obj:IsA("UIPadding") then
-
+        if obj ~= ListLayout and not obj:IsA("UIPadding") then
             obj:Destroy()
         end
     end
 
     for _, obj in ipairs(Categories:GetChildren()) do
-        if obj ~= CategoryLayout then
-            obj:Destroy()
-        end
+        if obj ~= CategoryLayout then obj:Destroy() end
     end
 
     table.clear(Entries)
@@ -1981,8 +1677,7 @@ local function Filter()
                 or CurrentCategory == "All"
                 or entry.category == CurrentCategory
 
-            entry.object.Visible =
-                matches and categoryMatches
+            entry.object.Visible = matches and categoryMatches
         end
     end
 end
@@ -1990,17 +1685,14 @@ end
 local function AddCategory(name)
     local button = Create("TextButton", {
         Size = UDim2.fromOffset(
-            math.max(61, #name * 8 + 24),
-            29
+            math.max(61, #name*8+24), 29
         ),
         BackgroundColor3 =
-            CurrentCategory == name
-            and C.selected or C.bg,
+            CurrentCategory == name and C.selected or C.bg,
         BorderSizePixel = 0,
         Text = name,
         TextColor3 =
-            CurrentCategory == name
-            and C.text or C.muted,
+            CurrentCategory == name and C.text or C.muted,
         Font = Enum.Font.GothamMedium,
         TextSize = 12
     }, Categories)
@@ -2018,10 +1710,8 @@ local function AddCategory(name)
         for _, child in ipairs(Categories:GetChildren()) do
             if child:IsA("TextButton") then
                 local selected = child.Text == name
-
                 child.BackgroundColor3 =
                     selected and C.selected or C.bg
-
                 child.TextColor3 =
                     selected and C.text or C.muted
             end
@@ -2032,17 +1722,9 @@ local function AddCategory(name)
 end
 
 local function SectionTitle(value, order)
-    local title = Label(
-        List,
-        value:upper(),
-        12,
-        C.muted,
-        true
-    )
-
+    local title = Label(List, value:upper(), 12, C.muted, true)
     title.Size = UDim2.new(1, 0, 0, 27)
     title.LayoutOrder = order or 0
-
     return title
 end
 
@@ -2057,17 +1739,10 @@ local function MakeCard(height, order)
 
     Corner(card, 9)
     Stroke(card, C.border)
-
     return card
 end
 
-local function Feature(
-    name,
-    category,
-    description,
-    callback,
-    keybind
-)
+local function Feature(name, category, description, callback, keybind)
     local card = MakeCard(60)
 
     local click = Create("TextButton", {
@@ -2082,12 +1757,8 @@ local function Feature(
     title.Size = UDim2.new(1, -112, 0, 24)
 
     local sub = Label(
-        card,
-        description or category,
-        12,
-        C.faint
+        card, description or category, 12, C.faint
     )
-
     sub.Name = "StatusLabel"
     sub.Position = UDim2.fromOffset(15, 33)
     sub.Size = UDim2.new(1, -112, 0, 18)
@@ -2124,7 +1795,6 @@ local function Feature(
 
         Corner(button, 6)
         Stroke(button, C.border)
-
         KeybindButtons[name] = button
 
         Bind(button.MouseButton1Click, function()
@@ -2152,8 +1822,7 @@ local function Toggle(name, key, category, callback)
         if callback then callback(State[key]) end
 
         if status and status.Parent then
-            status.Text =
-                State[key] and "Enabled" or "Disabled"
+            status.Text = State[key] and "Enabled" or "Disabled"
         end
     end
 
@@ -2172,23 +1841,10 @@ end
 
 local function Action(name, category, description, callback)
     Commands[name] = callback
-
-    Feature(
-        name,
-        category,
-        description,
-        callback,
-        true
-    )
+    Feature(name, category, description, callback, true)
 end
 
-local function Number(
-    name,
-    key,
-    category,
-    maximum,
-    callback
-)
+local function Number(name, key, category, maximum, callback)
     local card = MakeCard(71)
 
     local title = Label(card, name, 14, C.text, true)
@@ -2218,8 +1874,7 @@ local function Number(
 
     local fill = Create("Frame", {
         Size = UDim2.fromScale(
-            math.clamp(State[key] / maximum, 0, 1),
-            1
+            math.clamp(State[key]/maximum, 0, 1), 1
         ),
         BackgroundColor3 = C.purple
     }, track)
@@ -2234,16 +1889,11 @@ local function Number(
             return
         end
 
-        value = math.clamp(
-            math.floor(value + 0.5),
-            0,
-            maximum
-        )
+        value = math.clamp(math.floor(value+0.5), 0, maximum)
 
         State[key] = value
         input.Text = tostring(value)
-
-        fill.Size = UDim2.fromScale(value / maximum, 1)
+        fill.Size = UDim2.fromScale(value/maximum, 1)
 
         if callback then callback(value) end
         Save()
@@ -2256,13 +1906,10 @@ local function Number(
     local sliding = false
 
     Bind(track.InputBegan, function(i)
-        if i.UserInputType ==
-            Enum.UserInputType.MouseButton1 then
-
+        if i.UserInputType == Enum.UserInputType.MouseButton1 then
             sliding = true
-
             Apply(
-                (i.Position.X - track.AbsolutePosition.X)
+                (i.Position.X-track.AbsolutePosition.X)
                 / math.max(track.AbsoluteSize.X, 1)
                 * maximum
             )
@@ -2271,11 +1918,9 @@ local function Number(
 
     Bind(UIS.InputChanged, function(i)
         if sliding
-            and i.UserInputType ==
-            Enum.UserInputType.MouseMovement then
-
+            and i.UserInputType == Enum.UserInputType.MouseMovement then
             Apply(
-                (i.Position.X - track.AbsolutePosition.X)
+                (i.Position.X-track.AbsolutePosition.X)
                 / math.max(track.AbsoluteSize.X, 1)
                 * maximum
             )
@@ -2283,9 +1928,7 @@ local function Number(
     end)
 
     Bind(UIS.InputEnded, function(i)
-        if i.UserInputType ==
-            Enum.UserInputType.MouseButton1 then
-
+        if i.UserInputType == Enum.UserInputType.MouseButton1 then
             sliding = false
         end
     end)
@@ -2310,7 +1953,6 @@ Sections.Commands = function()
     end)
 
     Number("Fly Speed", "flySpeed", "Movement", 500)
-
     Toggle("Fly Animation", "flyAnim", "Movement")
 
     Toggle("Noclip", "noclip", "Movement", function(on)
@@ -2326,58 +1968,27 @@ Sections.Commands = function()
         if on then StartAirWalk() else StopAirWalk() end
     end)
 
-    Number(
-        "WalkSpeed",
-        "speed",
-        "Movement",
-        500,
-        function(v)
-            local h = Hum()
-            if h then h.WalkSpeed = v end
-        end
-    )
+    Number("WalkSpeed", "speed", "Movement", 500, function(v)
+        local h = Hum()
+        if h then h.WalkSpeed = v end
+    end)
 
-    Number(
-        "JumpPower",
-        "jump",
-        "Movement",
-        500,
-        function(v)
-            local h = Hum()
-
-            if h then
-                h.UseJumpPower = true
-                h.JumpPower = v
-            end
+    Number("JumpPower", "jump", "Movement", 500, function(v)
+        local h = Hum()
+        if h then
+            h.UseJumpPower = true
+            h.JumpPower = v
         end
-    )
+    end)
 
     Number("Dash Power", "dashPower", "Movement", 500)
-
     Action("Dash", "Movement", "Dash forward", Dash)
 
     SectionTitle("Character")
 
-    Toggle(
-        "Invisible",
-        "invisible",
-        "Character",
-        SetInvisible
-    )
-
-    Toggle(
-        "Headless",
-        "headless",
-        "Character",
-        SetHeadless
-    )
-
-    Toggle(
-        "Freeze",
-        "freeze",
-        "Character",
-        Freeze
-    )
+    Toggle("Invisible", "invisible", "Character", SetInvisible)
+    Toggle("Headless", "headless", "Character", SetHeadless)
+    Toggle("Freeze", "freeze", "Character", Freeze)
 
     Action("Sit", "Character", "Sit down", Sit)
     Action("Unstuck", "Character", "Move upward", Unstuck)
@@ -2386,13 +1997,7 @@ Sections.Commands = function()
     Action("Wave Emote", "Character", "Play wave", Wave)
 
     SectionTitle("Visuals")
-
-    Toggle(
-        "Fullbright",
-        "fullbright",
-        "Visuals",
-        Fullbright
-    )
+    Toggle("Fullbright", "fullbright", "Visuals", Fullbright)
 end
 
 --==================================================
@@ -2409,7 +2014,6 @@ local function ClearPlayerCards()
             data.frame:Destroy()
         end
     end
-
     table.clear(PlayerCards)
 end
 
@@ -2425,9 +2029,7 @@ local function MakePlayerCard(player, order)
         ScaleType = Enum.ScaleType.Crop
     }, card)
 
-    Create("UICorner", {
-        CornerRadius = UDim.new(1, 0)
-    }, avatar)
+    Corner(avatar, 20)
 
     local generation = PlayerGeneration
 
@@ -2440,33 +2042,18 @@ local function MakePlayerCard(player, order)
             )
         end)
 
-        if ok
-            and Alive
+        if ok and Alive
             and generation == PlayerGeneration
             and avatar.Parent then
-
             avatar.Image = image
         end
     end)
 
-    local display = Label(
-        card,
-        player.DisplayName,
-        14,
-        C.text,
-        true
-    )
-
+    local display = Label(card, player.DisplayName, 14, C.text, true)
     display.Position = UDim2.fromOffset(63, 10)
     display.Size = UDim2.new(1, -115, 0, 24)
 
-    local username = Label(
-        card,
-        "@" .. player.Name,
-        12,
-        C.muted
-    )
-
+    local username = Label(card, "@"..player.Name, 12, C.muted)
     username.Position = UDim2.fromOffset(63, 34)
     username.Size = UDim2.new(1, -115, 0, 19)
 
@@ -2501,15 +2088,12 @@ local function MakePlayerCard(player, order)
 
         Corner(button, 7)
         Bind(button.MouseButton1Click, callback)
-
         return button
     end
 
     local tp = Button("TP", 0, function()
         local target = player.Character
-            and player.Character:FindFirstChild(
-                "HumanoidRootPart"
-            )
+            and player.Character:FindFirstChild("HumanoidRootPart")
 
         local c = Char()
 
@@ -2519,9 +2103,7 @@ local function MakePlayerCard(player, order)
                 SetInvisible(false)
             end
 
-            c:PivotTo(
-                target.CFrame * CFrame.new(3, 0, 0)
-            )
+            c:PivotTo(target.CFrame * CFrame.new(3, 0, 0))
         end
     end)
 
@@ -2551,9 +2133,7 @@ local function MakePlayerCard(player, order)
             BackgroundColor3 = color
         })
 
-        Tween(arrow, {
-            Rotation = open and 90 or 0
-        })
+        Tween(arrow, {Rotation = open and 90 or 0})
     end
 
     PlayerCards[player.UserId] = {
@@ -2564,8 +2144,7 @@ local function MakePlayerCard(player, order)
     Bind(click.MouseButton1Click, function()
         ExpandedPlayer =
             ExpandedPlayer == player.UserId
-            and nil
-            or player.UserId
+            and nil or player.UserId
 
         for id, data in pairs(PlayerCards) do
             data.expand(id == ExpandedPlayer)
@@ -2574,14 +2153,13 @@ local function MakePlayerCard(player, order)
 
     AddEntry(
         card,
-        player.DisplayName .. " " .. player.Name,
+        player.DisplayName.." "..player.Name,
         "All"
     )
 end
 
 Sections.Players = function()
     AddCategory("All")
-
     PlayerGeneration += 1
     ClearPlayerCards()
 
@@ -2599,12 +2177,9 @@ Sections.Players = function()
 
     local info = Label(
         List,
-        tostring(#sorted)
-            .. " players · tap a player to view actions",
-        12,
-        C.muted
+        tostring(#sorted).." players · tap a player to view actions",
+        12, C.muted
     )
-
     info.Size = UDim2.new(1, 0, 0, 27)
 
     for i, player in ipairs(sorted) do
@@ -2621,13 +2196,12 @@ local function RefreshPlayers()
 end
 
 Bind(Players.PlayerAdded, RefreshPlayers)
-
 Bind(Players.PlayerRemoving, function()
     task.defer(RefreshPlayers)
 end)
 
 --==================================================
--- SERVER BROWSER / HTTP 429 HANDLING
+-- SERVER BROWSER / HTTP 429
 --==================================================
 
 local ServerBrowser = {
@@ -2657,9 +2231,7 @@ local function GetRequestFunction()
 end
 
 local function HeaderValue(headers, wanted)
-    if type(headers) ~= "table" then
-        return nil
-    end
+    if type(headers) ~= "table" then return nil end
 
     for key, value in pairs(headers) do
         if tostring(key):lower() == wanted:lower() then
@@ -2681,9 +2253,7 @@ local function RequestServers(url)
         return requestFunction({
             Url = url,
             Method = "GET",
-            Headers = {
-                ["Accept"] = "application/json"
-            }
+            Headers = {["Accept"] = "application/json"}
         })
     end)
 
@@ -2695,9 +2265,7 @@ local function RequestServers(url)
         return nil, "Invalid response", nil, false
     end
 
-    local status = tonumber(
-        response.StatusCode or response.Status
-    )
+    local status = tonumber(response.StatusCode or response.Status)
 
     if status == 429 then
         local retryAfter = HeaderValue(
@@ -2706,7 +2274,6 @@ local function RequestServers(url)
         )
 
         local seconds = tonumber(retryAfter)
-
         if seconds then
             seconds = math.clamp(seconds, 1, 120)
         end
@@ -2715,7 +2282,7 @@ local function RequestServers(url)
     end
 
     if status and status ~= 200 then
-        return nil, "HTTP " .. tostring(status), nil, false
+        return nil, "HTTP "..tostring(status), nil, false
     end
 
     local decodedOk, decoded = pcall(function()
@@ -2727,7 +2294,6 @@ local function RequestServers(url)
     if not decodedOk
         or type(decoded) ~= "table"
         or type(decoded.data) ~= "table" then
-
         return nil, "Invalid server data", nil, false
     end
 
@@ -2741,8 +2307,7 @@ local function ServerURL(cursor)
         .. "/servers/Public?sortOrder=Desc&limit=100"
 
     if cursor and cursor ~= "" then
-        url ..= "&cursor="
-            .. HttpService:UrlEncode(cursor)
+        url ..= "&cursor="..HttpService:UrlEncode(cursor)
     end
 
     return url
@@ -2752,15 +2317,12 @@ local function JoinServer(placeId, jobId)
     if type(placeId) ~= "number"
         or type(jobId) ~= "string"
         or jobId == "" then
-
         return false, "Invalid server"
     end
 
     return pcall(function()
         TeleportService:TeleportToPlaceInstance(
-            placeId,
-            jobId,
-            LP
+            placeId, jobId, LP
         )
     end)
 end
@@ -2790,52 +2352,38 @@ local function ServerCard(server, index, current)
 
     if type(id) ~= "string" or id == "" then return end
 
-    local key = tostring(placeId) .. ":" .. id
+    local key = tostring(placeId)..":"..id
     if ServerBrowser.cards[key] then return end
 
-    local card = MakeCard(
-        67,
-        current and 1 or (10 + index)
-    )
-
+    local card = MakeCard(67, current and 1 or (10+index))
     card.ClipsDescendants = true
 
-    if current then
-        card.BackgroundColor3 = C.selected
-    end
+    if current then card.BackgroundColor3 = C.selected end
 
     local indicator = Create("Frame", {
         Position = UDim2.fromOffset(19, 18),
         Size = UDim2.fromOffset(8, 8),
-        BackgroundColor3 =
-            current and C.purple or C.green,
+        BackgroundColor3 = current and C.purple or C.green,
         BorderSizePixel = 0
     }, card)
 
-    Create("UICorner", {
-        CornerRadius = UDim.new(1, 0)
-    }, indicator)
+    Corner(indicator, 4)
 
     local titleText = current
         and "CURRENT SERVER"
-        or ("Server " .. tostring(index))
+        or ("Server "..tostring(index))
 
     local title = Label(
-        card,
-        titleText,
-        14,
-        current and C.purple or C.text,
-        true
+        card, titleText, 14,
+        current and C.purple or C.text, true
     )
-
     title.Position = UDim2.fromOffset(37, 8)
     title.Size = UDim2.new(1, -85, 0, 25)
 
     local subtitle =
         tostring(server.playing or #Players:GetPlayers())
-        .. "/"
-        .. tostring(server.maxPlayers or Players.MaxPlayers)
-        .. " Players"
+        .."/"..tostring(server.maxPlayers or Players.MaxPlayers)
+        .." Players"
 
     local population = Label(card, subtitle, 12, C.muted)
     population.Position = UDim2.fromOffset(37, 34)
@@ -2859,20 +2407,13 @@ local function ServerCard(server, index, current)
     }, card)
 
     local shortId = #id > 16
-        and (id:sub(1, 8) .. "..." .. id:sub(-5))
+        and (id:sub(1, 8).. "..." ..id:sub(-5))
         or id
 
-    local idLabel = Label(
-        details,
-        "ID: " .. shortId,
-        11,
-        C.faint
-    )
-
+    local idLabel = Label(details, "ID: "..shortId, 11, C.faint)
     idLabel.Size = UDim2.new(1, 0, 0, 22)
 
-    local defaultText =
-        current and "Rejoin Server" or "Join Server"
+    local defaultText = current and "Rejoin Server" or "Join Server"
 
     local join = Create("TextButton", {
         Position = UDim2.fromOffset(0, 33),
@@ -2889,12 +2430,9 @@ local function ServerCard(server, index, current)
     Stroke(join, C.border)
 
     Bind(join.MouseButton1Click, function()
-        join.Text =
-            current and "Rejoining..." or "Joining..."
+        join.Text = current and "Rejoining..." or "Joining..."
 
-        if State.autoExecute then
-            QueueNextTeleport()
-        end
+        if State.autoExecute then QueueNextTeleport() end
 
         local ok, err = JoinServer(placeId, id)
 
@@ -2903,9 +2441,7 @@ local function ServerCard(server, index, current)
             join.Text = "Join Failed"
 
             task.delay(2, function()
-                if join.Parent then
-                    join.Text = defaultText
-                end
+                if join.Parent then join.Text = defaultText end
             end)
         end
     end)
@@ -2917,17 +2453,12 @@ local function ServerCard(server, index, current)
             highlighted and C.card or C.selected
 
         Tween(card, {
-            Size = UDim2.new(
-                1, 0, 0,
-                open and 166 or 67
-            ),
+            Size = UDim2.new(1, 0, 0, open and 166 or 67),
             BackgroundColor3 =
                 highlighted and C.selected or C.card
         })
 
-        Tween(arrow, {
-            Rotation = open and 90 or 0
-        })
+        Tween(arrow, {Rotation = open and 90 or 0})
     end
 
     ServerBrowser.cards[key] = {
@@ -2939,31 +2470,19 @@ local function ServerCard(server, index, current)
 
     Bind(click.MouseButton1Click, function()
         ServerBrowser.expanded =
-            ServerBrowser.expanded == key
-            and nil
-            or key
+            ServerBrowser.expanded == key and nil or key
 
         for serverKey, data in pairs(ServerBrowser.cards) do
-            data.expand(
-                serverKey == ServerBrowser.expanded
-            )
+            data.expand(serverKey == ServerBrowser.expanded)
         end
     end)
 
-    AddEntry(
-        card,
-        titleText .. " " .. id,
-        "All",
-        current
-    )
-
+    AddEntry(card, titleText.." "..id, "All", current)
     Filter()
 end
 
 local function SetServerStatus(value)
-    if ServerBrowser.status
-        and ServerBrowser.status.Parent then
-
+    if ServerBrowser.status and ServerBrowser.status.Parent then
         ServerBrowser.status.Text = value
     end
 end
@@ -2975,13 +2494,12 @@ local function WaitForRetry(seconds, generation)
         if not Alive
             or Active ~= "Servers"
             or generation ~= ServerBrowser.generation then
-
             return false
         end
 
         SetServerStatus(
             "Rate limited - retrying in "
-            .. tostring(remaining) .. "s..."
+            ..tostring(remaining).."s..."
         )
 
         task.wait(1)
@@ -2994,33 +2512,27 @@ local function WaitForRetry(seconds, generation)
 end
 
 local function FetchServerPageWithRetry(url, generation)
-    for attempt = 1, SERVER_MAX_RETRIES + 1 do
+    for attempt = 1, SERVER_MAX_RETRIES+1 do
         if not Alive
             or Active ~= "Servers"
             or generation ~= ServerBrowser.generation then
-
             return nil, "Cancelled"
         end
 
         local data, err, retryAfter, rateLimited =
             RequestServers(url)
 
-        if data then
-            return data
-        end
-
-        if not rateLimited then
-            return nil, err
-        end
+        if data then return data end
+        if not rateLimited then return nil, err end
 
         local delaySeconds = retryAfter or math.min(
-            SERVER_INITIAL_BACKOFF * (2 ^ (attempt - 1)),
+            SERVER_INITIAL_BACKOFF*(2^(attempt-1)),
             SERVER_MAX_BACKOFF
         )
 
         ServerBrowser.cooldownUntil = math.max(
             ServerBrowser.cooldownUntil,
-            os.clock() + delaySeconds
+            os.clock()+delaySeconds
         )
 
         if attempt > SERVER_MAX_RETRIES then
@@ -3047,10 +2559,9 @@ LoadServerPage = function(reset)
     if now < ServerBrowser.cooldownUntil then
         SetServerStatus(
             "Please wait "
-            .. math.ceil(ServerBrowser.cooldownUntil - now)
-            .. "s before requesting servers"
+            ..math.ceil(ServerBrowser.cooldownUntil-now)
+            .."s before requesting servers"
         )
-
         return
     end
 
@@ -3066,14 +2577,12 @@ LoadServerPage = function(reset)
 
     task.spawn(function()
         local data, err = FetchServerPageWithRetry(
-            ServerURL(cursor),
-            generation
+            ServerURL(cursor), generation
         )
 
         if not Alive
             or Active ~= "Servers"
             or generation ~= ServerBrowser.generation then
-
             return
         end
 
@@ -3083,11 +2592,9 @@ LoadServerPage = function(reset)
             if err ~= "Cancelled" then
                 SetServerStatus(
                     tostring(#ServerBrowser.servers)
-                    .. " servers loaded - "
-                    .. tostring(err)
+                    .." servers loaded - "..tostring(err)
                 )
             end
-
             return
         end
 
@@ -3099,7 +2606,6 @@ LoadServerPage = function(reset)
                     currentCards[key] = entry
                 else
                     RemoveEntry(entry.frame)
-
                     if entry.frame.Parent then
                         entry.frame:Destroy()
                     end
@@ -3117,14 +2623,10 @@ LoadServerPage = function(reset)
             if type(server.id) == "string"
                 and server.id ~= game.JobId then
 
-                local key =
-                    tostring(game.PlaceId) .. ":" .. server.id
+                local key = tostring(game.PlaceId)..":"..server.id
 
                 if not ServerBrowser.cards[key] then
-                    table.insert(
-                        ServerBrowser.servers,
-                        server
-                    )
+                    table.insert(ServerBrowser.servers, server)
 
                     ServerCard(
                         server,
@@ -3137,7 +2639,7 @@ LoadServerPage = function(reset)
 
         SetServerStatus(
             tostring(#ServerBrowser.servers)
-            .. " other public servers loaded"
+            .." other public servers loaded"
         )
 
         if ServerBrowser.loadMore then
@@ -3157,7 +2659,6 @@ end
 Sections.Servers = function()
     CurrentCategory = "All"
     AddCategory("All")
-
     SearchBox.PlaceholderText = "search servers..."
 
     if game.JobId ~= "" then
@@ -3170,15 +2671,10 @@ Sections.Servers = function()
     end
 
     local info = Label(
-        List,
-        "Preparing server browser...",
-        12,
-        C.muted
+        List, "Preparing server browser...", 12, C.muted
     )
-
     info.Size = UDim2.new(1, 0, 0, 28)
     info.LayoutOrder = 2
-
     ServerBrowser.status = info
 
     local refreshCard = MakeCard(51, 1000000)
@@ -3205,10 +2701,8 @@ Sections.Servers = function()
 
         if remaining > 0 then
             SetServerStatus(
-                "Refresh available in "
-                .. math.ceil(remaining) .. "s"
+                "Refresh available in "..math.ceil(remaining).."s"
             )
-
             return
         end
 
@@ -3231,9 +2725,7 @@ Sections.Servers = function()
     moreCard.Visible = false
 
     Bind(more.MouseButton1Click, function()
-        if not ServerBrowser.loading
-            and ServerBrowser.cursor then
-
+        if not ServerBrowser.loading and ServerBrowser.cursor then
             LoadServerPage(false)
         end
     end)
@@ -3285,23 +2777,14 @@ Sections.Settings = function()
     local autoCard = MakeCard(74)
 
     local autoTitle = Label(
-        autoCard,
-        "Auto Execute",
-        14,
-        C.text,
-        true
+        autoCard, "Auto Execute", 14, C.text, true
     )
-
     autoTitle.Position = UDim2.fromOffset(15, 8)
     autoTitle.Size = UDim2.new(1, -115, 0, 25)
 
     local autoStatus = Label(
-        autoCard,
-        AutoExecute.status,
-        12,
-        C.muted
+        autoCard, AutoExecute.status, 12, C.muted
     )
-
     autoStatus.Position = UDim2.fromOffset(15, 36)
     autoStatus.Size = UDim2.new(1, -115, 0, 24)
 
@@ -3318,8 +2801,7 @@ Sections.Settings = function()
 
     local knob = Create("Frame", {
         Position = UDim2.fromOffset(
-            State.autoExecute and 32 or 4,
-            4
+            State.autoExecute and 32 or 4, 4
         ),
         Size = UDim2.fromOffset(22, 22),
         BackgroundColor3 = C.text
@@ -3340,8 +2822,7 @@ Sections.Settings = function()
 
         Tween(knob, {
             Position = UDim2.fromOffset(
-                enabled and 32 or 4,
-                4
+                enabled and 32 or 4, 4
             )
         })
     end)
@@ -3351,7 +2832,7 @@ Sections.Settings = function()
     Feature(
         "Menu Hotkey",
         "All",
-        "Current: " .. State.menuKey,
+        "Current: "..State.menuKey,
         function()
             ChangingMenuKey = true
             SearchBox.Text = ""
@@ -3369,10 +2850,8 @@ Sections.Settings = function()
             State.uiY = 0.5
 
             Window.Position = UDim2.new(
-                0.5,
-                -WIDTH / 2,
-                0.5,
-                -HEIGHT / 2
+                0.5, -WIDTH/2,
+                0.5, -HEIGHT/2
             )
 
             Save()
@@ -3397,37 +2876,27 @@ Sections.Settings = function()
     local card = MakeCard(74)
 
     local title = Label(
-        card,
-        "V44 GUI Icons",
-        14,
-        C.text,
-        true
+        card, "V45 Reference Icons", 14, C.text, true
     )
-
     title.Position = UDim2.fromOffset(14, 8)
     title.Size = UDim2.new(1, -28, 0, 23)
 
     local status = Label(
-        card,
-        "Native Roblox GUI rendering",
-        12,
-        C.green
+        card, "Native Roblox GUI rendering", 12, C.green
     )
-
     status.Position = UDim2.fromOffset(14, 35)
     status.Size = UDim2.new(1, -28, 0, 20)
 
     local description = Label(
         card,
-        "Thinner strokes · rebuilt gear",
+        "Outlined gear · target cursor · thin mic",
         11,
         C.faint
     )
-
     description.Position = UDim2.fromOffset(14, 55)
     description.Size = UDim2.new(1, -28, 0, 17)
 
-    AddEntry(card, "v44 icon system", "All")
+    AddEntry(card, "v45 icon system", "All")
 end
 
 --==================================================
@@ -3454,15 +2923,13 @@ ShowSection = function(name)
 
     SearchBox.Text = ""
     SearchBox.PlaceholderText =
-        "search " .. name:lower() .. "..."
+        "search "..name:lower().."..."
 
     Heading.Text = name:lower()
-
     ClearList()
 
     if Sections[name] then
         local ok, err = pcall(Sections[name])
-
         if not ok then
             warn("[KHASTIFY] Page error:", name, err)
         end
@@ -3500,9 +2967,7 @@ local DragStart
 local StartPosition
 
 Bind(Topbar.InputBegan, function(input)
-    if input.UserInputType ==
-        Enum.UserInputType.MouseButton1 then
-
+    if input.UserInputType == Enum.UserInputType.MouseButton1 then
         Dragging = true
         DragStart = input.Position
         StartPosition = Window.Position
@@ -3511,8 +2976,7 @@ end)
 
 Bind(UIS.InputChanged, function(input)
     if Dragging
-        and input.UserInputType ==
-        Enum.UserInputType.MouseMovement then
+        and input.UserInputType == Enum.UserInputType.MouseMovement then
 
         local delta = input.Position - DragStart
 
@@ -3526,34 +2990,24 @@ Bind(UIS.InputChanged, function(input)
 end)
 
 Bind(UIS.InputEnded, function(input)
-    if input.UserInputType ==
-        Enum.UserInputType.MouseButton1
+    if input.UserInputType == Enum.UserInputType.MouseButton1
         and Dragging then
 
         Dragging = false
 
         local camera = workspace.CurrentCamera
-
         if camera then
             local size = camera.ViewportSize
 
             if size.X > 0 and size.Y > 0 then
                 State.uiX = math.clamp(
-                    (
-                        Window.AbsolutePosition.X
-                        + WIDTH / 2
-                    ) / size.X,
-                    0,
-                    1
+                    (Window.AbsolutePosition.X+WIDTH/2)/size.X,
+                    0, 1
                 )
 
                 State.uiY = math.clamp(
-                    (
-                        Window.AbsolutePosition.Y
-                        + HEIGHT / 2
-                    ) / size.Y,
-                    0,
-                    1
+                    (Window.AbsolutePosition.Y+HEIGHT/2)/size.Y,
+                    0, 1
                 )
 
                 Save()
@@ -3568,20 +3022,16 @@ end)
 
 Bind(UIS.InputBegan, function(input, processed)
     if WaitingForBind then
-        if input.UserInputType ==
-            Enum.UserInputType.Keyboard then
-
+        if input.UserInputType == Enum.UserInputType.Keyboard then
             local name = WaitingForBind
             WaitingForBind = nil
 
             if input.KeyCode == Enum.KeyCode.Delete
                 or input.KeyCode == Enum.KeyCode.Backspace then
-
                 Keybinds[name] = nil
 
             elseif input.KeyCode ~= Enum.KeyCode.Escape
                 and input.KeyCode ~= Enum.KeyCode.Unknown then
-
                 Keybinds[name] = input.KeyCode.Name
             end
 
@@ -3592,36 +3042,27 @@ Bind(UIS.InputBegan, function(input, processed)
                     Keybinds[name] or "..."
             end
         end
-
         return
     end
 
     if ChangingMenuKey then
-        if input.UserInputType ==
-            Enum.UserInputType.Keyboard then
-
+        if input.UserInputType == Enum.UserInputType.Keyboard then
             ChangingMenuKey = false
 
             if input.KeyCode ~= Enum.KeyCode.Escape
                 and input.KeyCode ~= Enum.KeyCode.Unknown then
-
                 State.menuKey = input.KeyCode.Name
                 Save()
             end
 
             ShowSection("Settings")
         end
-
         return
     end
 
-    if processed or UIS:GetFocusedTextBox() then
-        return
-    end
+    if processed or UIS:GetFocusedTextBox() then return end
 
-    if input.UserInputType ==
-        Enum.UserInputType.Keyboard then
-
+    if input.UserInputType == Enum.UserInputType.Keyboard then
         local key = input.KeyCode.Name
 
         if key == State.menuKey then
@@ -3633,30 +3074,22 @@ Bind(UIS.InputBegan, function(input, processed)
             and State.infiniteJump then
 
             local h = Hum()
-
             if h then
-                h:ChangeState(
-                    Enum.HumanoidStateType.Jumping
-                )
+                h:ChangeState(Enum.HumanoidStateType.Jumping)
             end
         end
 
         for commandName, assignedKey in pairs(Keybinds) do
             if assignedKey == key then
                 local command = Commands[commandName]
-
-                if command then
-                    pcall(command)
-                end
-
+                if command then pcall(command) end
                 break
             end
         end
     end
 
     if State.clickTP
-        and input.UserInputType ==
-            Enum.UserInputType.MouseButton1 then
+        and input.UserInputType == Enum.UserInputType.MouseButton1 then
 
         local position = UIS:GetMouseLocation()
 
@@ -3667,38 +3100,28 @@ Bind(UIS.InputBegan, function(input, processed)
 
         local overUI =
             Window.Visible
-            and position.X >= x
-            and position.X <= x + w
-            and position.Y >= y
-            and position.Y <= y + h
+            and position.X >= x and position.X <= x+w
+            and position.Y >= y and position.Y <= y+h
 
         if not overUI then
             local camera = workspace.CurrentCamera
 
             if camera then
                 local ray = camera:ViewportPointToRay(
-                    position.X,
-                    position.Y
+                    position.X, position.Y
                 )
 
                 local params = RaycastParams.new()
-                params.FilterType =
-                    Enum.RaycastFilterType.Exclude
+                params.FilterType = Enum.RaycastFilterType.Exclude
 
                 local excluded = {}
-
-                if Char() then
-                    table.insert(excluded, Char())
-                end
-
+                if Char() then table.insert(excluded, Char()) end
                 if VisualAvatar then
                     table.insert(excluded, VisualAvatar)
                 end
-
                 if InvisibleFloor then
                     table.insert(excluded, InvisibleFloor)
                 end
-
                 if AirPlatform then
                     table.insert(excluded, AirPlatform)
                 end
@@ -3707,7 +3130,7 @@ Bind(UIS.InputBegan, function(input, processed)
 
                 local hit = workspace:Raycast(
                     ray.Origin,
-                    ray.Direction * 10000,
+                    ray.Direction*10000,
                     params
                 )
 
@@ -3718,19 +3141,15 @@ Bind(UIS.InputBegan, function(input, processed)
                     end
 
                     local c = Char()
-
                     if c then
                         c:PivotTo(
                             CFrame.new(
-                                hit.Position
-                                + Vector3.new(0, 3.5, 0)
+                                hit.Position+Vector3.new(0, 3.5, 0)
                             )
                         )
                     end
 
-                    if State.airWalk then
-                        StartAirWalk()
-                    end
+                    if State.airWalk then StartAirWalk() end
                 end
             end
         end
@@ -3753,30 +3172,24 @@ Bind(Run.Heartbeat, function()
     if State.airWalk and AirPlatform and r then
         AirPlatform.Position = Vector3.new(
             r.Position.X,
-            AirHeight - 0.25,
+            AirHeight-0.25,
             r.Position.Z
         )
     end
 
-    if State.invisible then
-        UpdateInvisible()
-    end
+    if State.invisible then UpdateInvisible() end
 
     if Active == "Servers" then
-        local key =
-            tostring(game.PlaceId) .. ":" .. game.JobId
-
+        local key = tostring(game.PlaceId)..":"..game.JobId
         local data = ServerBrowser.cards[key]
 
-        if data
-            and data.population
+        if data and data.population
             and data.population.Parent then
 
             local value =
                 tostring(#Players:GetPlayers())
-                .. "/"
-                .. tostring(Players.MaxPlayers)
-                .. " Players"
+                .."/"..tostring(Players.MaxPlayers)
+                .." Players"
 
             if data.population.Text ~= value then
                 data.population.Text = value
@@ -3786,9 +3199,7 @@ Bind(Run.Heartbeat, function()
 end)
 
 Bind(Run.RenderStepped, function()
-    if State.invisible then
-        MirrorAvatar()
-    end
+    if State.invisible then MirrorAvatar() end
 
     if State.fly and FlyVelocity and FlyGyro then
         local camera = workspace.CurrentCamera
@@ -3800,23 +3211,18 @@ Bind(Run.RenderStepped, function()
         if UIS:IsKeyDown(Enum.KeyCode.W) then
             direction += cf.LookVector
         end
-
         if UIS:IsKeyDown(Enum.KeyCode.S) then
             direction -= cf.LookVector
         end
-
         if UIS:IsKeyDown(Enum.KeyCode.D) then
             direction += cf.RightVector
         end
-
         if UIS:IsKeyDown(Enum.KeyCode.A) then
             direction -= cf.RightVector
         end
-
         if UIS:IsKeyDown(Enum.KeyCode.Space) then
             direction += Vector3.yAxis
         end
-
         if UIS:IsKeyDown(Enum.KeyCode.LeftControl) then
             direction -= Vector3.yAxis
         end
@@ -3866,9 +3272,7 @@ Bind(LP.CharacterAdded, function(c)
 
     task.wait(0.3)
 
-    if State.fly then
-        StartFly()
-    end
+    if State.fly then StartFly() end
 end)
 
 --==================================================
@@ -3883,9 +3287,7 @@ if h then
     h.JumpPower = State.jump
 end
 
-if State.fullbright then
-    Fullbright(true)
-end
+if State.fullbright then Fullbright(true) end
 
 ShowSection("Commands")
 
@@ -3928,17 +3330,16 @@ _G.KHASTIFY_HUB_CLEANUP = function()
     end
 
     GUI:Destroy()
-
     _G.KHASTIFY_HUB_CLEANUP = nil
 end
 
 print("====================================")
-print("KHASTIFY'S UNIVERSAL HUB V44")
-print("THINNER ACTIONS ICON")
-print("THINNER MICROPHONE SUPPORT")
-print("REBUILT EIGHT-TOOTH GEAR")
+print("KHASTIFY'S UNIVERSAL HUB V45")
+print("REFERENCE-STYLE OUTLINED GEAR")
+print("TARGET / CURSOR ACTIONS ICON")
+print("THINNER ROUNDED MICROPHONE SUPPORT")
 print("NATIVE ROBLOX GUI ICONS")
 print("AUTO EXECUTE PRESERVED")
 print("HTTP 429 HANDLING PRESERVED")
-print("Press " .. State.menuKey .. " to open.")
+print("Press "..State.menuKey.." to open.")
 print("====================================")
