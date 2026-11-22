@@ -1,24 +1,11 @@
 --[[
-    KHASTIFY'S UNIVERSAL HUB V35
+    KHASTIFY'S UNIVERSAL HUB V36
 
-    NEW IN V35:
-    - All six icons now use Roblox image assets
-    - Consistent 30x30 icon sizing
-    - Purple selected icons / gray unselected icons
-    - Matching page-heading icons
-
-    PRESERVED:
-    - Auto Execute
-    - Servers > All
-    - Current Server / Rejoin Server
-    - Public Server Browser
-    - Refresh / Load More
-    - Player List / TP / Fling button
-    - Fly / Noclip / Infinite Jump / Click TP
-    - Air Walk / Dash / Headless / Freeze
-    - Fullbright / Invisible
-    - Custom keybinds
-    - Settings persistence
+    V36:
+    - Automatic Decal-to-Image resolution
+    - Six custom Roblox icon assets
+    - Icon loading status diagnostics
+    - Purple selected / gray unselected icons
 
     K = Toggle Hub
     Q = Dash
@@ -35,6 +22,8 @@ local TweenService = game:GetService("TweenService")
 local Lighting = game:GetService("Lighting")
 local TeleportService = game:GetService("TeleportService")
 local HttpService = game:GetService("HttpService")
+local InsertService = game:GetService("InsertService")
+local ContentProvider = game:GetService("ContentProvider")
 
 local LP = Players.LocalPlayer
 
@@ -148,33 +137,100 @@ local C = {
 }
 
 --==================================================
--- V35 CUSTOM ICON ASSETS
+-- V36 CUSTOM ICON SYSTEM
 --==================================================
 
-local CustomIcons = {
-    commands = "rbxassetid://111489400016278",
-    voice = "rbxassetid://137933301681698",
-    players = "rbxassetid://84512129868473",
-    actions = "rbxassetid://111579979673929",
-    servers = "rbxassetid://87649587116575",
-    settings = "rbxassetid://121438238834196"
+local IconAssets = {
+    commands = 111489400016278,
+    voice = 137933301681698,
+    players = 84512129868473,
+    actions = 111579979673929,
+    servers = 87649587116575,
+    settings = 121438238834196
 }
 
-local ICON_SIZE = 30
+local ResolvedIcons = {}
+local IconLabels = {}
+local IconStatus = {}
+
+local function ResolveIcon(kind)
+    if ResolvedIcons[kind] then
+        return ResolvedIcons[kind]
+    end
+
+    local assetId = IconAssets[kind]
+
+    if not assetId then
+        return ""
+    end
+
+    local imageId =
+        "rbxassetid://" .. tostring(assetId)
+
+    local ok, asset = pcall(function()
+        return InsertService:LoadAsset(assetId)
+    end)
+
+    if ok and asset then
+        local decal = asset:FindFirstChildWhichIsA(
+            "Decal",
+            true
+        )
+
+        if decal and decal.Texture ~= "" then
+            imageId = decal.Texture
+            IconStatus[kind] = "Resolved"
+        else
+            IconStatus[kind] = "No texture found"
+        end
+
+        asset:Destroy()
+    else
+        IconStatus[kind] = "Resolution unavailable"
+    end
+
+    ResolvedIcons[kind] = imageId
+
+    return imageId
+end
 
 local function DrawIcon(parent, kind, color)
-    return Create("ImageLabel", {
-        Name = kind .. "Icon",
-        AnchorPoint = Vector2.new(0.5, 0.5),
-        Position = UDim2.fromScale(0.5, 0.5),
-        Size = UDim2.fromOffset(ICON_SIZE, ICON_SIZE),
-        BackgroundTransparency = 1,
-        BorderSizePixel = 0,
-        Image = CustomIcons[kind] or "",
-        ImageColor3 = color or C.muted,
-        ImageTransparency = 0,
-        ScaleType = Enum.ScaleType.Fit
-    }, parent)
+    local icon = Instance.new("ImageLabel")
+
+    icon.Name = kind .. "Icon"
+    icon.AnchorPoint = Vector2.new(0.5, 0.5)
+    icon.Position = UDim2.fromScale(0.5, 0.5)
+    icon.Size = UDim2.fromOffset(30, 30)
+    icon.BackgroundTransparency = 1
+    icon.BorderSizePixel = 0
+    icon.ImageColor3 = color or C.muted
+    icon.ScaleType = Enum.ScaleType.Fit
+    icon.Image =
+        "rbxassetid://" .. tostring(IconAssets[kind] or "")
+    icon.Parent = parent
+
+    IconLabels[kind] = IconLabels[kind] or {}
+    table.insert(IconLabels[kind], icon)
+
+    task.spawn(function()
+        local resolved = ResolveIcon(kind)
+
+        if icon.Parent then
+            icon.Image = resolved
+        end
+
+        pcall(function()
+            ContentProvider:PreloadAsync(
+                {icon},
+                function(_, status)
+                    IconStatus[kind] =
+                        status.Name
+                end
+            )
+        end)
+    end)
+
+    return icon
 end
 
 local function DrawSearchIcon(parent)
@@ -1225,7 +1281,7 @@ Brand.Size = UDim2.fromOffset(135, 25)
 
 local Version = Label(
     Sidebar,
-    "universal hub v35",
+    "universal hub v36",
     11,
     C.muted
 )
@@ -2918,6 +2974,51 @@ Sections.Settings = function()
         end,
         false
     )
+
+    SectionTitle("Icon Diagnostics", 20)
+
+    for _, item in ipairs({
+        {"Commands", "commands"},
+        {"Voice Chat", "voice"},
+        {"Players", "players"},
+        {"Actions", "actions"},
+        {"Servers", "servers"},
+        {"Settings", "settings"}
+    }) do
+        local name, kind = item[1], item[2]
+
+        local card = MakeCard(48)
+
+        local iconName = Label(
+            card,
+            name,
+            13,
+            C.text,
+            true
+        )
+
+        iconName.Position = UDim2.fromOffset(14, 5)
+        iconName.Size = UDim2.new(1, -25, 0, 20)
+
+        local status = Label(
+            card,
+            IconStatus[kind] or "Checking...",
+            11,
+            C.muted
+        )
+
+        status.Position = UDim2.fromOffset(14, 25)
+        status.Size = UDim2.new(1, -25, 0, 18)
+
+        task.spawn(function()
+            while Alive and card.Parent do
+                status.Text =
+                    IconStatus[kind] or "Checking..."
+
+                task.wait(0.5)
+            end
+        end)
+    end
 end
 
 --==================================================
@@ -3473,14 +3574,9 @@ _G.KHASTIFY_HUB_CLEANUP = function()
 end
 
 print("====================================")
-print("KHASTIFY'S UNIVERSAL HUB V35")
-print("ALL SIX CUSTOM IMAGE ICONS ENABLED")
-print("COMMANDS: 111489400016278")
-print("VOICE CHAT: 137933301681698")
-print("PLAYERS: 84512129868473")
-print("ACTIONS: 111579979673929")
-print("SERVERS: 87649587116575")
-print("SETTINGS: 121438238834196")
+print("KHASTIFY'S UNIVERSAL HUB V36")
+print("AUTOMATIC DECAL RESOLUTION ENABLED")
+print("ALL SIX CUSTOM ICONS CONFIGURED")
 print("AUTO EXECUTE PRESERVED")
 print("SERVERS > ALL PRESERVED")
 print("Press " .. State.menuKey .. " to open.")
