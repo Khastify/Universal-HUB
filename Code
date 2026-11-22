@@ -1,8 +1,22 @@
 --[[
-    KHASTIFY'S UNIVERSAL HUB V12
-    Restored Vector Icons + Dynamic Page Icons
-    V11 Player Cards / V9 Invisibility
+    KHASTIFY'S UNIVERSAL HUB V13
+
+    UI POLISH UPDATE
+    - Four correctly rounded outer corners
+    - Smooth, bold sidebar icons
+    - Matching page heading icons
+    - Restored V11 Settings gear
+    - Improved typography
+    - Searchable menus
+    - Expandable player cards
+    - V9-based underground invisibility
+
+    Roblox Luau
 ]]
+
+-- ==========================================
+-- SERVICES
+-- ==========================================
 
 local Players = game:GetService("Players")
 local UIS = game:GetService("UserInputService")
@@ -10,15 +24,21 @@ local Run = game:GetService("RunService")
 local Lighting = game:GetService("Lighting")
 local Http = game:GetService("HttpService")
 local TeleportService = game:GetService("TeleportService")
+
 local LP = Players.LocalPlayer
 
 if _G.KHASTIFY_HUB_CLEANUP then
     pcall(_G.KHASTIFY_HUB_CLEANUP)
 end
 
-local parent = (gethui and gethui()) or LP:WaitForChild("PlayerGui")
-local old = parent:FindFirstChild("KhastifyUniversalHub")
-if old then old:Destroy() end
+local parent = (gethui and gethui())
+    or LP:WaitForChild("PlayerGui")
+
+local previous = parent:FindFirstChild("KhastifyUniversalHub")
+
+if previous then
+    previous:Destroy()
+end
 
 local connections = {}
 local alive = true
@@ -43,22 +63,31 @@ local function root()
     return c and c:FindFirstChild("HumanoidRootPart")
 end
 
+-- ==========================================
+-- SETTINGS
+-- ==========================================
+
 local state = {
     fly = false,
     flySpeed = 60,
     flyAnim = false,
+
     noclip = false,
     infiniteJump = false,
     clickTP = false,
     airWalk = false,
+
     dashPower = 84,
+    speed = 16,
+    jump = 50,
+
     invisible = false,
     headless = false,
     freeze = false,
     fullbright = false,
-    speed = 16,
-    jump = 50,
+
     menuKey = "K",
+
     uiX = 0.5,
     uiY = 0.5
 }
@@ -68,16 +97,22 @@ local saveFile = "KHASTIFY_Universal_Hub_Settings.json"
 if type(readfile) == "function" then
     pcall(function()
         local saved = Http:JSONDecode(readfile(saveFile))
-        for k, v in pairs(saved) do
-            if state[k] ~= nil and type(v) == type(state[k]) then
-                state[k] = v
+
+        for key, value in pairs(saved) do
+            if state[key] ~= nil
+                and type(value) == type(state[key]) then
+
+                state[key] = value
             end
         end
     end)
 end
 
 local function save()
-    if type(writefile) ~= "function" then return end
+    if type(writefile) ~= "function" then
+        return
+    end
+
     pcall(function()
         writefile(saveFile, Http:JSONEncode({
             flySpeed = state.flySpeed,
@@ -91,25 +126,41 @@ local function save()
     end)
 end
 
+-- ==========================================
+-- COLORS
+-- ==========================================
+
 local C = {
     bg = Color3.fromRGB(9, 10, 15),
     side = Color3.fromRGB(8, 9, 13),
+
     card = Color3.fromRGB(17, 18, 25),
     hover = Color3.fromRGB(23, 24, 34),
-    selected = Color3.fromRGB(26, 21, 39),
-    border = Color3.fromRGB(31, 32, 43),
-    text = Color3.fromRGB(239, 238, 246),
-    muted = Color3.fromRGB(137, 138, 156),
-    faint = Color3.fromRGB(92, 94, 111),
-    purple = Color3.fromRGB(151, 83, 255)
+    selected = Color3.fromRGB(27, 21, 42),
+
+    border = Color3.fromRGB(32, 33, 45),
+
+    text = Color3.fromRGB(240, 239, 247),
+    muted = Color3.fromRGB(142, 143, 161),
+    faint = Color3.fromRGB(96, 98, 116),
+
+    purple = Color3.fromRGB(157, 91, 255),
+    purpleDark = Color3.fromRGB(93, 47, 159)
 }
+
+-- ==========================================
+-- UI HELPERS
+-- ==========================================
 
 local function create(class, props, parentObj)
     local obj = Instance.new(class)
-    for k, v in pairs(props or {}) do
-        obj[k] = v
+
+    for key, value in pairs(props or {}) do
+        obj[key] = value
     end
+
     obj.Parent = parentObj
+
     return obj
 end
 
@@ -119,194 +170,273 @@ local function corner(obj, radius)
     }, obj)
 end
 
-local function stroke(obj)
+local function stroke(obj, color, thickness)
     return create("UIStroke", {
-        Color = C.border,
-        Thickness = 1
+        Color = color or C.border,
+        Thickness = thickness or 1,
+        ApplyStrokeMode = Enum.ApplyStrokeMode.Border
     }, obj)
 end
 
-local function label(parentObj, value, size, color, bold)
+local function label(parentObj, value, size, color, weight)
+    local fonts = {
+        regular = Enum.Font.Gotham,
+        medium = Enum.Font.GothamMedium,
+        bold = Enum.Font.GothamBold
+    }
+
     return create("TextLabel", {
         BackgroundTransparency = 1,
         BorderSizePixel = 0,
+
         Text = value,
         TextColor3 = color or C.text,
-        Font = bold and Enum.Font.GothamBold or Enum.Font.Gotham,
+
+        Font = fonts[weight or "regular"],
         TextSize = size or 12,
+
         TextXAlignment = Enum.TextXAlignment.Left,
-        TextYAlignment = Enum.TextYAlignment.Center
+        TextYAlignment = Enum.TextYAlignment.Center,
+
+        TextTruncate = Enum.TextTruncate.AtEnd
     }, parentObj)
 end
 
 -- ==========================================
--- SHARED VECTOR ICON SYSTEM
+-- SMOOTH ICON SYSTEM V13
 -- ==========================================
--- Used by BOTH sidebar and page headings.
 
-local function iconLine(parentObj, x1, y1, x2, y2, color, thickness)
+local ICON_THICKNESS = 2.1
+
+local function line(parentObj, x1, y1, x2, y2, color, thickness)
     local dx = x2 - x1
     local dy = y2 - y1
+
     local length = math.sqrt(dx * dx + dy * dy)
 
-    local line = create("Frame", {
+    local obj = create("Frame", {
         AnchorPoint = Vector2.new(0.5, 0.5),
+
         Position = UDim2.fromOffset(
             (x1 + x2) / 2,
             (y1 + y2) / 2
         ),
-        Size = UDim2.fromOffset(length, thickness or 1.6),
+
+        Size = UDim2.fromOffset(
+            length,
+            thickness or ICON_THICKNESS
+        ),
+
         Rotation = math.deg(math.atan2(dy, dx)),
+
         BackgroundColor3 = color,
         BorderSizePixel = 0
     }, parentObj)
 
-    corner(line, 2)
-    return line
+    create("UICorner", {
+        CornerRadius = UDim.new(1, 0)
+    }, obj)
+
+    return obj
 end
 
-local function iconCircle(parentObj, x, y, radius, color)
-    local circle = create("Frame", {
-        Position = UDim2.fromOffset(x - radius, y - radius),
-        Size = UDim2.fromOffset(radius * 2, radius * 2),
+local function circle(parentObj, x, y, radius, color, thickness)
+    local obj = create("Frame", {
+        Position = UDim2.fromOffset(
+            x - radius,
+            y - radius
+        ),
+
+        Size = UDim2.fromOffset(
+            radius * 2,
+            radius * 2
+        ),
+
         BackgroundTransparency = 1,
         BorderSizePixel = 0
     }, parentObj)
 
     create("UICorner", {
         CornerRadius = UDim.new(1, 0)
-    }, circle)
+    }, obj)
 
-    create("UIStroke", {
-        Color = color,
-        Thickness = 1.5
-    }, circle)
+    stroke(obj, color, thickness or ICON_THICKNESS)
 
-    return circle
+    return obj
 end
 
-local function iconRect(parentObj, x, y, w, h, color, radius)
-    local rect = create("Frame", {
+local function rect(parentObj, x, y, w, h, color, radius)
+    local obj = create("Frame", {
         Position = UDim2.fromOffset(x, y),
         Size = UDim2.fromOffset(w, h),
+
         BackgroundTransparency = 1,
         BorderSizePixel = 0
     }, parentObj)
 
-    corner(rect, radius or 2)
+    corner(obj, radius or 3)
+    stroke(obj, color, ICON_THICKNESS)
 
-    create("UIStroke", {
-        Color = color,
-        Thickness = 1.5
-    }, rect)
+    return obj
+end
 
-    return rect
+local function dot(parentObj, x, y, radius, color)
+    local obj = create("Frame", {
+        Position = UDim2.fromOffset(
+            x - radius,
+            y - radius
+        ),
+
+        Size = UDim2.fromOffset(
+            radius * 2,
+            radius * 2
+        ),
+
+        BackgroundColor3 = color,
+        BorderSizePixel = 0
+    }, parentObj)
+
+    create("UICorner", {
+        CornerRadius = UDim.new(1, 0)
+    }, obj)
+
+    return obj
+end
+
+local function curve(parentObj, points, color, thickness)
+    for i = 1, #points - 1 do
+        local a = points[i]
+        local b = points[i + 1]
+
+        line(
+            parentObj,
+            a.X, a.Y,
+            b.X, b.Y,
+            color,
+            thickness
+        )
+    end
+
+    for _, point in ipairs(points) do
+        dot(
+            parentObj,
+            point.X,
+            point.Y,
+            (thickness or ICON_THICKNESS) / 2,
+            color
+        )
+    end
 end
 
 local function drawIcon(parentObj, kind, color)
     color = color or C.muted
 
     if kind == "commands" then
-        iconLine(parentObj, 2, 5, 7, 9, color, 1.8)
-        iconLine(parentObj, 7, 9, 2, 13, color, 1.8)
-        iconLine(parentObj, 10, 15, 18, 15, color, 1.8)
+
+        line(parentObj, 2, 5, 8, 10, color, 2.3)
+        line(parentObj, 8, 10, 2, 15, color, 2.3)
+        line(parentObj, 11, 16, 19, 16, color, 2.3)
 
     elseif kind == "voice" then
-        -- Microphone capsule
-        iconRect(parentObj, 7, 2, 6, 10, color, 4)
 
-        -- Microphone cradle
-        iconLine(parentObj, 4, 9, 4, 12, color)
-        iconLine(parentObj, 16, 9, 16, 12, color)
-        iconLine(parentObj, 4, 12, 7, 15, color)
-        iconLine(parentObj, 7, 15, 13, 15, color)
-        iconLine(parentObj, 13, 15, 16, 12, color)
+        -- Rounded microphone
 
-        -- Stand
-        iconLine(parentObj, 10, 15, 10, 18, color)
-        iconLine(parentObj, 7, 18, 13, 18, color)
+        rect(parentObj, 7, 2, 6, 11, color, 4)
+
+        curve(parentObj, {
+            Vector2.new(3.5, 10),
+            Vector2.new(4, 13),
+            Vector2.new(6, 15),
+            Vector2.new(10, 16),
+            Vector2.new(14, 15),
+            Vector2.new(16, 13),
+            Vector2.new(16.5, 10)
+        }, color, 1.9)
+
+        line(parentObj, 10, 16, 10, 19, color, 2)
+        line(parentObj, 7, 19, 13, 19, color, 2)
 
     elseif kind == "players" then
-        -- Two heads
-        iconCircle(parentObj, 7, 6, 3, color)
-        iconCircle(parentObj, 15, 7, 2.5, color)
 
-        -- Front person's shoulders
-        iconLine(parentObj, 2, 17, 2, 14, color)
-        iconLine(parentObj, 2, 14, 5, 11, color)
-        iconLine(parentObj, 5, 11, 9, 11, color)
-        iconLine(parentObj, 9, 11, 12, 14, color)
-        iconLine(parentObj, 12, 14, 12, 17, color)
+        -- Rounded two-person icon
 
-        -- Second person's shoulders
-        iconLine(parentObj, 14, 12, 17, 13, color)
-        iconLine(parentObj, 17, 13, 19, 16, color)
-        iconLine(parentObj, 19, 16, 19, 18, color)
+        circle(parentObj, 7, 6, 3.1, color, 1.9)
+        circle(parentObj, 15, 7, 2.5, color, 1.9)
+
+        curve(parentObj, {
+            Vector2.new(2, 17),
+            Vector2.new(2.5, 14),
+            Vector2.new(4.5, 12),
+            Vector2.new(7, 11.5),
+            Vector2.new(9.5, 12),
+            Vector2.new(11.5, 14),
+            Vector2.new(12, 17)
+        }, color, 1.9)
+
+        curve(parentObj, {
+            Vector2.new(14.5, 12),
+            Vector2.new(17, 13),
+            Vector2.new(18.5, 15),
+            Vector2.new(19, 18)
+        }, color, 1.9)
 
     elseif kind == "actions" then
-        -- Diagonal magic wand
-        iconLine(parentObj, 4, 17, 16, 5, color, 2.4)
+
+        -- Rounded magic wand
+
+        line(parentObj, 4, 17, 16, 5, color, 2.6)
+
+        dot(parentObj, 4, 17, 1.3, color)
+        dot(parentObj, 16, 5, 1.3, color)
 
         -- Sparkles
-        iconLine(parentObj, 3, 3, 3, 8, color)
-        iconLine(parentObj, 1, 5.5, 5, 5.5, color)
 
-        iconLine(parentObj, 15, 12, 15, 17, color)
-        iconLine(parentObj, 12.5, 14.5, 17.5, 14.5, color)
+        line(parentObj, 3, 2, 3, 8, color, 1.8)
+        line(parentObj, 0, 5, 6, 5, color, 1.8)
 
-        iconLine(parentObj, 11, 1, 11, 4, color)
+        line(parentObj, 15, 12, 15, 18, color, 1.8)
+        line(parentObj, 12, 15, 18, 15, color, 1.8)
+
+        dot(parentObj, 11, 2, 1.2, color)
 
     elseif kind == "servers" then
-        -- Two stacked server units
-        iconRect(parentObj, 2, 2, 16, 7, color, 2)
-        iconRect(parentObj, 2, 11, 16, 7, color, 2)
 
-        -- Status indicators
-        iconCircle(parentObj, 5.5, 5.5, 0.8, color)
-        iconCircle(parentObj, 5.5, 14.5, 0.8, color)
+        -- Smooth stacked server outlines
+
+        rect(parentObj, 2, 2, 17, 7, color, 3)
+        rect(parentObj, 2, 12, 17, 7, color, 3)
+
+        dot(parentObj, 5.5, 5.5, 1.1, color)
+        dot(parentObj, 5.5, 15.5, 1.1, color)
+
+        line(parentObj, 10, 5.5, 16, 5.5, color, 1.5)
+        line(parentObj, 10, 15.5, 16, 15.5, color, 1.5)
 
     elseif kind == "settings" then
-        -- Gear ring
-        iconCircle(parentObj, 10, 10, 5.5, color)
-        iconCircle(parentObj, 10, 10, 2, color)
 
-        for i = 0, 7 do
-            local angle = math.rad(i * 45)
+        -- Original V11 gear icon
 
-            iconLine(
-                parentObj,
-                10 + math.cos(angle) * 6,
-                10 + math.sin(angle) * 6,
-                10 + math.cos(angle) * 9,
-                10 + math.sin(angle) * 9,
-                color,
-                1.5
-            )
-        end
+        create("TextLabel", {
+            Position = UDim2.fromOffset(0, -1),
+            Size = UDim2.fromOffset(20, 20),
+
+            BackgroundTransparency = 1,
+
+            Text = "⚙",
+            TextColor3 = color,
+
+            Font = Enum.Font.GothamBold,
+            TextSize = 20,
+
+            TextXAlignment = Enum.TextXAlignment.Center,
+            TextYAlignment = Enum.TextYAlignment.Center
+        }, parentObj)
+
     end
-end
-
-local function makeIcon(parentObj, kind, color, x, y, scale)
-    local holder = create("Frame", {
-        Position = UDim2.fromOffset(x or 0, y or 0),
-        Size = UDim2.fromOffset(20, 20),
-        BackgroundTransparency = 1,
-        BorderSizePixel = 0
-    }, parentObj)
-
-    if scale and scale ~= 1 then
-        create("UIScale", {
-            Scale = scale
-        }, holder)
-    end
-
-    drawIcon(holder, kind, color)
-
-    return holder
 end
 
 -- ==========================================
--- MOVEMENT
+-- MOVEMENT SYSTEM
 -- ==========================================
 
 local collisions = {}
@@ -320,6 +450,7 @@ local function noclip()
             if collisions[p] == nil then
                 collisions[p] = p.CanCollide
             end
+
             p.CanCollide = false
         end
     end
@@ -331,6 +462,7 @@ local function restoreCollision()
             p.CanCollide = value
         end
     end
+
     table.clear(collisions)
 end
 
@@ -338,14 +470,22 @@ local flyVelocity
 local flyGyro
 
 local function stopFly()
-    if flyVelocity then flyVelocity:Destroy() end
-    if flyGyro then flyGyro:Destroy() end
+    if flyVelocity then
+        flyVelocity:Destroy()
+    end
+
+    if flyGyro then
+        flyGyro:Destroy()
+    end
 
     flyVelocity = nil
     flyGyro = nil
 
     local h = hum()
-    if h then h.PlatformStand = false end
+
+    if h then
+        h.PlatformStand = false
+    end
 end
 
 local function startFly()
@@ -353,6 +493,7 @@ local function startFly()
 
     local r = root()
     local h = hum()
+
     if not r or not h then return end
 
     h.PlatformStand = true
@@ -372,11 +513,14 @@ local function platform(name, size)
     return create("Part", {
         Name = name,
         Size = size,
+
         Anchored = true,
         Transparency = 1,
+
         CanCollide = true,
         CanTouch = false,
         CanQuery = false,
+
         CastShadow = false
     }, workspace)
 end
@@ -385,7 +529,10 @@ local airPlatform
 local airHeight
 
 local function stopAirWalk()
-    if airPlatform then airPlatform:Destroy() end
+    if airPlatform then
+        airPlatform:Destroy()
+    end
+
     airPlatform = nil
     airHeight = nil
 end
@@ -394,9 +541,11 @@ local function startAirWalk()
     stopAirWalk()
 
     local r = root()
+
     if not r then return end
 
     airHeight = r.Position.Y - 3.2
+
     airPlatform = platform(
         "KHASTIFY_AirWalk",
         Vector3.new(10, 0.5, 10)
@@ -406,6 +555,7 @@ end
 local function dash()
     local r = root()
     local camera = workspace.CurrentCamera
+
     if not r or not camera then return end
 
     local d = camera.CFrame.LookVector
@@ -413,21 +563,23 @@ local function dash()
 
     if d.Magnitude < 0.01 then return end
 
-    local v = r.AssemblyLinearVelocity
+    local velocity = r.AssemblyLinearVelocity
 
     r.AssemblyLinearVelocity =
-        d.Unit * state.dashPower +
-        Vector3.new(0, v.Y, 0)
+        d.Unit * state.dashPower
+        + Vector3.new(0, velocity.Y, 0)
 end
 
 -- ==========================================
--- UNDERGROUND INVISIBILITY
+-- INVISIBILITY SYSTEM
 -- ==========================================
 
 local OFFSET = 11
+
 local invisibleActive = false
 local visualAvatar
 local invisibleFloor
+
 local partPairs = {}
 local transparency = {}
 
@@ -444,15 +596,22 @@ local function restoreTransparency()
             p.LocalTransparencyModifier = value
         end
     end
+
     table.clear(transparency)
 end
 
 local function destroyInvisible()
-    if visualAvatar then visualAvatar:Destroy() end
-    if invisibleFloor then invisibleFloor:Destroy() end
+    if visualAvatar then
+        visualAvatar:Destroy()
+    end
+
+    if invisibleFloor then
+        invisibleFloor:Destroy()
+    end
 
     visualAvatar = nil
     invisibleFloor = nil
+
     table.clear(partPairs)
 end
 
@@ -466,15 +625,21 @@ local function partPath(obj, ancestor)
         for _, sibling in ipairs(current.Parent:GetChildren()) do
             if sibling.Name == current.Name
                 and sibling.ClassName == current.ClassName then
+
                 index += 1
-                if sibling == current then break end
+
+                if sibling == current then
+                    break
+                end
             end
         end
 
         table.insert(
             pieces,
             1,
-            current.ClassName .. ":" .. current.Name .. ":" .. index
+            current.ClassName .. ":"
+                .. current.Name .. ":"
+                .. index
         )
 
         current = current.Parent
@@ -485,6 +650,7 @@ end
 
 local function makeVisual()
     local c = char()
+
     if not c then return nil end
 
     local archivable = c.Archivable
@@ -496,39 +662,55 @@ local function makeVisual()
 
     c.Archivable = archivable
 
-    if not ok or not clone then return nil end
+    if not ok or not clone then
+        return nil
+    end
 
     clone.Name = "KHASTIFY_TransparentAvatar"
 
     for _, obj in ipairs(clone:GetDescendants()) do
-        if obj:IsA("Script") or obj:IsA("LocalScript") then
+        if obj:IsA("Script")
+            or obj:IsA("LocalScript") then
+
             obj:Destroy()
 
         elseif obj:IsA("JointInstance")
             or obj:IsA("WeldConstraint")
             or obj:IsA("Constraint") then
+
             obj:Destroy()
 
         elseif obj:IsA("BasePart") then
+
             obj.Anchored = true
             obj.CanCollide = false
             obj.CanTouch = false
             obj.CanQuery = false
+
             obj.CastShadow = false
             obj.LocalTransparencyModifier = 0
 
             if obj.Name == "HumanoidRootPart" then
                 obj.Transparency = 1
             else
-                obj.Transparency = math.max(obj.Transparency, 0.3)
+                obj.Transparency = math.max(
+                    obj.Transparency,
+                    0.3
+                )
             end
 
-        elseif obj:IsA("Decal") or obj:IsA("Texture") then
-            obj.Transparency = math.max(obj.Transparency, 0.3)
+        elseif obj:IsA("Decal")
+            or obj:IsA("Texture") then
+
+            obj.Transparency = math.max(
+                obj.Transparency,
+                0.3
+            )
 
         elseif obj:IsA("ParticleEmitter")
             or obj:IsA("Trail")
             or obj:IsA("Beam") then
+
             obj.Enabled = false
         end
     end
@@ -545,30 +727,44 @@ local function makeVisual()
 
     for _, p in ipairs(c:GetDescendants()) do
         if p:IsA("BasePart") then
-            local match = lookup[partPath(p, c)]
-            if match then
+            local matching = lookup[partPath(p, c)]
+
+            if matching then
                 table.insert(partPairs, {
                     source = p,
-                    visual = match
+                    visual = matching
                 })
             end
         end
     end
 
     clone.Parent = workspace
+
     return clone
 end
 
 local function groundAt(x, z, referenceY)
     local params = RaycastParams.new()
+
     params.FilterType = Enum.RaycastFilterType.Exclude
 
     local excluded = {}
 
-    if char() then table.insert(excluded, char()) end
-    if visualAvatar then table.insert(excluded, visualAvatar) end
-    if invisibleFloor then table.insert(excluded, invisibleFloor) end
-    if airPlatform then table.insert(excluded, airPlatform) end
+    if char() then
+        table.insert(excluded, char())
+    end
+
+    if visualAvatar then
+        table.insert(excluded, visualAvatar)
+    end
+
+    if invisibleFloor then
+        table.insert(excluded, invisibleFloor)
+    end
+
+    if airPlatform then
+        table.insert(excluded, airPlatform)
+    end
 
     params.FilterDescendantsInstances = excluded
 
@@ -588,12 +784,15 @@ end
 local function setBodyY(y)
     local c = char()
     local r = root()
+
     if not c or not r then return end
 
     local delta = y - r.Position.Y
 
     if math.abs(delta) > 0.001 then
-        c:PivotTo(c:GetPivot() + Vector3.new(0, delta, 0))
+        c:PivotTo(
+            c:GetPivot() + Vector3.new(0, delta, 0)
+        )
     end
 end
 
@@ -609,8 +808,11 @@ local function restoreCamera()
         camera.CameraType =
             originalCameraType or Enum.CameraType.Custom
 
-        if originalCameraSubject and originalCameraSubject.Parent then
+        if originalCameraSubject
+            and originalCameraSubject.Parent then
+
             camera.CameraSubject = originalCameraSubject
+
         elseif h then
             camera.CameraSubject = h
         end
@@ -622,7 +824,9 @@ local function restoreCamera()
 end
 
 local function mirrorAvatar()
-    if not invisibleActive or not visualAvatar then return end
+    if not invisibleActive or not visualAvatar then
+        return
+    end
 
     local offset = Vector3.new(0, OFFSET, 0)
 
@@ -642,7 +846,9 @@ local function setInvisible(enabled)
 
     if not enabled then
         if invisibleActive and c then
-            c:PivotTo(c:GetPivot() + Vector3.new(0, OFFSET, 0))
+            c:PivotTo(
+                c:GetPivot() + Vector3.new(0, OFFSET, 0)
+            )
 
             if r then
                 r.AssemblyLinearVelocity = Vector3.zero
@@ -651,20 +857,27 @@ local function setInvisible(enabled)
         end
 
         invisibleActive = false
+
         restoreCamera()
         destroyInvisible()
         restoreTransparency()
 
-        if not state.noclip then restoreCollision() end
+        if not state.noclip then
+            restoreCollision()
+        end
 
         floorY = nil
         lastGroundY = nil
+
         return
     end
 
-    if invisibleActive or not c or not r or not h then return end
+    if invisibleActive or not c or not r or not h then
+        return
+    end
 
     local clone = makeVisual()
+
     if not clone then
         state.invisible = false
         return
@@ -693,7 +906,9 @@ local function setInvisible(enabled)
 
     noclip()
 
-    c:PivotTo(c:GetPivot() + Vector3.new(0, -OFFSET, 0))
+    c:PivotTo(
+        c:GetPivot() + Vector3.new(0, -OFFSET, 0)
+    )
 
     r.AssemblyLinearVelocity = Vector3.zero
     r.AssemblyAngularVelocity = Vector3.zero
@@ -712,11 +927,13 @@ local function setInvisible(enabled)
     )
 
     invisibleActive = true
+
     mirrorAvatar()
 
     if camera then
         camera.CameraType = Enum.CameraType.Custom
         camera.CameraSubject = h
+
         h.CameraOffset =
             originalCameraOffset + Vector3.new(0, OFFSET, 0)
     end
@@ -731,13 +948,19 @@ local function updateInvisible()
     noclip()
 
     local p = r.Position
-    local ground = groundAt(p.X, p.Z, p.Y + OFFSET)
+
+    local ground = groundAt(
+        p.X,
+        p.Z,
+        p.Y + OFFSET
+    )
 
     if ground then
         local difference = ground - lastGroundY
 
         if (difference >= 0 and difference <= 3.5)
             or (difference < 0 and difference >= -5) then
+
             setBodyY(r.Position.Y + difference)
             lastGroundY = ground
         end
@@ -760,15 +983,25 @@ local function updateInvisible()
 
         if r.Position.Y < minimumY then
             setBodyY(minimumY)
+
             local v = r.AssemblyLinearVelocity
-            r.AssemblyLinearVelocity =
-                Vector3.new(v.X, math.max(0, v.Y), v.Z)
+
+            r.AssemblyLinearVelocity = Vector3.new(
+                v.X,
+                math.max(0, v.Y),
+                v.Z
+            )
 
         elseif r.Position.Y > maximumY then
             setBodyY(maximumY)
+
             local v = r.AssemblyLinearVelocity
-            r.AssemblyLinearVelocity =
-                Vector3.new(v.X, math.min(0, v.Y), v.Z)
+
+            r.AssemblyLinearVelocity = Vector3.new(
+                v.X,
+                math.min(0, v.Y),
+                v.Z
+            )
         end
     end
 end
@@ -783,11 +1016,13 @@ local headDecals = {}
 local function setHeadless(enabled)
     local c = char()
     local head = c and c:FindFirstChild("Head")
+
     if not head then return end
 
     if enabled then
         if headTransparency[head] == nil then
-            headTransparency[head] = head.LocalTransparencyModifier
+            headTransparency[head] =
+                head.LocalTransparencyModifier
         end
 
         head.LocalTransparencyModifier = 1
@@ -797,16 +1032,21 @@ local function setHeadless(enabled)
                 if headDecals[obj] == nil then
                     headDecals[obj] = obj.Transparency
                 end
+
                 obj.Transparency = 1
             end
         end
     else
         for p, value in pairs(headTransparency) do
-            if p.Parent then p.LocalTransparencyModifier = value end
+            if p.Parent then
+                p.LocalTransparencyModifier = value
+            end
         end
 
         for p, value in pairs(headDecals) do
-            if p.Parent then p.Transparency = value end
+            if p.Parent then
+                p.Transparency = value
+            end
         end
 
         table.clear(headTransparency)
@@ -816,6 +1056,7 @@ end
 
 local function freeze(enabled)
     local r = root()
+
     if not r then return end
 
     r.Anchored = enabled
@@ -837,6 +1078,7 @@ local function unstuck()
 
     state.freeze = false
     r.Anchored = false
+
     r.CFrame = r.CFrame + Vector3.new(0, 6, 0)
     r.AssemblyLinearVelocity = Vector3.zero
 end
@@ -880,7 +1122,7 @@ local function fullbright(enabled)
 end
 
 -- ==========================================
--- MAIN UI
+-- MAIN WINDOW V13
 -- ==========================================
 
 local gui = create("ScreenGui", {
@@ -894,44 +1136,107 @@ local WIDTH = 570
 local HEIGHT = 610
 local SIDE = 154
 
+-- Outer window
 local window = create("Frame", {
+    Name = "Window",
+
     Size = UDim2.fromOffset(WIDTH, HEIGHT),
+
     Position = UDim2.new(
-        state.uiX, -WIDTH / 2,
-        state.uiY, -HEIGHT / 2
+        state.uiX,
+        -WIDTH / 2,
+        state.uiY,
+        -HEIGHT / 2
     ),
+
     BackgroundColor3 = C.bg,
     BorderSizePixel = 0,
+
     ClipsDescendants = true
 }, gui)
 
-corner(window, 16)
-stroke(window)
+corner(window, 17)
+stroke(window, C.border, 1)
+
+-- ==========================================
+-- ROUNDED SIDEBAR FIX
+-- ==========================================
+
+-- A rounded sidebar background fills the entire
+-- sidebar, while an additional rectangle fills its
+-- right edge. This keeps the two LEFT corners rounded
+-- and the divider edge straight.
 
 local sidebar = create("Frame", {
+    Name = "Sidebar",
+
     Size = UDim2.fromOffset(SIDE, HEIGHT),
+
     BackgroundColor3 = C.side,
-    BorderSizePixel = 0
+    BorderSizePixel = 0,
+
+    ClipsDescendants = true
 }, window)
 
+corner(sidebar, 17)
+
+-- Straight right edge
+create("Frame", {
+    Position = UDim2.new(1, -18, 0, 0),
+
+    Size = UDim2.new(0, 18, 1, 0),
+
+    BackgroundColor3 = C.side,
+    BorderSizePixel = 0
+}, sidebar)
+
+-- Divider
 create("Frame", {
     Position = UDim2.new(1, -1, 0, 0),
+
     Size = UDim2.new(0, 1, 1, 0),
+
     BackgroundColor3 = C.border,
     BorderSizePixel = 0
 }, sidebar)
 
-local brand = label(sidebar, "KHASTIFY", 15, C.text, true)
+-- Brand
+local brand = label(
+    sidebar,
+    "KHASTIFY",
+    14,
+    C.text,
+    "bold"
+)
+
 brand.Position = UDim2.fromOffset(24, 32)
 brand.Size = UDim2.fromOffset(115, 24)
 
-local version = label(sidebar, "universal hub v12", 9, C.muted)
+local version = label(
+    sidebar,
+    "universal hub v13",
+    9,
+    C.muted,
+    "regular"
+)
+
 version.Position = UDim2.fromOffset(24, 55)
 version.Size = UDim2.fromOffset(115, 18)
 
+-- ==========================================
+-- MAIN CONTENT
+-- ==========================================
+
 local main = create("Frame", {
     Position = UDim2.fromOffset(SIDE, 0),
-    Size = UDim2.new(1, -SIDE, 1, 0),
+
+    Size = UDim2.new(
+        1,
+        -SIDE,
+        1,
+        0
+    ),
+
     BackgroundTransparency = 1
 }, window)
 
@@ -940,69 +1245,96 @@ local topbar = create("Frame", {
     BackgroundTransparency = 1
 }, main)
 
--- Dynamic heading icon
-local headingIconHolder = create("Frame", {
+local headingIcon = create("Frame", {
     Position = UDim2.fromOffset(17, 20),
     Size = UDim2.fromOffset(20, 20),
     BackgroundTransparency = 1
 }, topbar)
 
-local heading = label(topbar, "commands", 16, C.text, true)
+local heading = label(
+    topbar,
+    "commands",
+    15,
+    C.text,
+    "bold"
+)
+
 heading.Position = UDim2.fromOffset(47, 15)
 heading.Size = UDim2.new(1, -140, 0, 30)
 
 local close = create("TextButton", {
     Position = UDim2.new(1, -37, 0, 15),
     Size = UDim2.fromOffset(23, 25),
+
     BackgroundTransparency = 1,
+
     Text = "×",
     TextColor3 = C.muted,
-    Font = Enum.Font.Gotham,
-    TextSize = 23
+
+    Font = Enum.Font.GothamMedium,
+    TextSize = 22
 }, topbar)
 
 local minimize = create("TextButton", {
     Position = UDim2.new(1, -68, 0, 15),
     Size = UDim2.fromOffset(23, 25),
+
     BackgroundTransparency = 1,
+
     Text = "−",
     TextColor3 = C.muted,
-    Font = Enum.Font.Gotham,
-    TextSize = 19
+
+    Font = Enum.Font.GothamMedium,
+    TextSize = 18
 }, topbar)
+
+-- ==========================================
+-- SEARCH
+-- ==========================================
 
 local searchFrame = create("Frame", {
     Position = UDim2.fromOffset(17, 72),
+
     Size = UDim2.new(1, -34, 0, 48),
+
     BackgroundColor3 = C.card,
     BorderSizePixel = 0
 }, main)
 
-corner(searchFrame, 10)
+corner(searchFrame, 11)
 stroke(searchFrame)
 
-local searchIconHolder = create("Frame", {
+local searchIcon = create("Frame", {
     Position = UDim2.fromOffset(16, 14),
     Size = UDim2.fromOffset(20, 20),
     BackgroundTransparency = 1
 }, searchFrame)
 
-iconCircle(searchIconHolder, 8, 8, 5, C.muted)
-iconLine(searchIconHolder, 12, 12, 17, 17, C.muted)
+circle(searchIcon, 8, 8, 5, C.muted, 1.8)
+line(searchIcon, 12, 12, 17, 17, C.muted, 1.8)
 
 local searchBox = create("TextBox", {
     Position = UDim2.fromOffset(46, 0),
     Size = UDim2.new(1, -62, 1, 0),
+
     BackgroundTransparency = 1,
+
     Text = "",
     PlaceholderText = "search commands...",
+
     PlaceholderColor3 = C.faint,
     TextColor3 = C.text,
+
     Font = Enum.Font.Gotham,
     TextSize = 12,
+
     TextXAlignment = Enum.TextXAlignment.Left,
     ClearTextOnFocus = false
 }, searchFrame)
+
+-- ==========================================
+-- CATEGORIES
+-- ==========================================
 
 local categories = create("Frame", {
     Position = UDim2.fromOffset(17, 132),
@@ -1016,13 +1348,21 @@ local categoryLayout = create("UIListLayout", {
     VerticalAlignment = Enum.VerticalAlignment.Center
 }, categories)
 
+-- ==========================================
+-- FEATURE LIST
+-- ==========================================
+
 local list = create("ScrollingFrame", {
     Position = UDim2.fromOffset(17, 174),
+
     Size = UDim2.new(1, -34, 1, -190),
+
     BackgroundTransparency = 1,
     BorderSizePixel = 0,
+
     ScrollBarThickness = 3,
     ScrollBarImageColor3 = C.purple,
+
     CanvasSize = UDim2.fromOffset(0, 0)
 }, main)
 
@@ -1031,17 +1371,21 @@ local listLayout = create("UIListLayout", {
     SortOrder = Enum.SortOrder.LayoutOrder
 }, list)
 
-bind(listLayout:GetPropertyChangedSignal("AbsoluteContentSize"), function()
-    list.CanvasSize = UDim2.fromOffset(
-        0, listLayout.AbsoluteContentSize.Y + 14
-    )
-end)
+bind(
+    listLayout:GetPropertyChangedSignal("AbsoluteContentSize"),
+    function()
+        list.CanvasSize = UDim2.fromOffset(
+            0,
+            listLayout.AbsoluteContentSize.Y + 14
+        )
+    end
+)
 
 -- ==========================================
--- SIDEBAR
+-- SIDEBAR NAVIGATION
 -- ==========================================
 
-local nav = {
+local navigation = {
     {"Commands", "commands"},
     {"Voice Chat", "voice"},
     {"Players", "players"},
@@ -1053,48 +1397,60 @@ local nav = {
 local navButtons = {}
 local active = "Commands"
 
-for i, entry in ipairs(nav) do
+for i, entry in ipairs(navigation) do
     local name = entry[1]
-    local iconKind = entry[2]
+    local kind = entry[2]
 
-    local y = name == "Settings" and HEIGHT - 58
+    local y = name == "Settings"
+        and HEIGHT - 58
         or 105 + (i - 1) * 43
 
-    local b = create("TextButton", {
+    local button = create("TextButton", {
         Position = UDim2.fromOffset(12, y),
         Size = UDim2.fromOffset(130, 39),
+
         BackgroundColor3 = C.side,
         BorderSizePixel = 0,
+
         Text = "",
         AutoButtonColor = false
     }, sidebar)
 
-    corner(b, 7)
+    corner(button, 8)
 
     local iconHolder = create("Frame", {
         Position = UDim2.fromOffset(13, 10),
         Size = UDim2.fromOffset(20, 20),
         BackgroundTransparency = 1
-    }, b)
+    }, button)
 
-    local nameLabel = label(b, name, 11, C.muted)
+    local nameLabel = label(
+        button,
+        name,
+        11,
+        C.muted,
+        "medium"
+    )
+
     nameLabel.Position = UDim2.fromOffset(43, 0)
     nameLabel.Size = UDim2.new(1, -53, 1, 0)
 
     local indicator = create("Frame", {
         Position = UDim2.new(1, -5, 0.5, -12),
         Size = UDim2.fromOffset(3, 24),
+
         BackgroundColor3 = C.purple,
         BorderSizePixel = 0,
+
         Visible = false
-    }, b)
+    }, button)
 
     corner(indicator, 3)
 
     navButtons[name] = {
-        button = b,
-        iconHolder = iconHolder,
-        iconKind = iconKind,
+        button = button,
+        icon = iconHolder,
+        kind = kind,
         label = nameLabel,
         indicator = indicator
     }
@@ -1111,41 +1467,41 @@ local function updateNav()
             selected and C.text or C.muted
 
         data.label.Font =
-            selected and Enum.Font.GothamBold or Enum.Font.Gotham
+            selected and Enum.Font.GothamBold
+            or Enum.Font.GothamMedium
 
         data.indicator.Visible = selected
 
-        -- Redraw vector icon in selected/unselected color.
-        for _, child in ipairs(data.iconHolder:GetChildren()) do
+        for _, child in ipairs(data.icon:GetChildren()) do
             child:Destroy()
         end
 
         drawIcon(
-            data.iconHolder,
-            data.iconKind,
+            data.icon,
+            data.kind,
             selected and C.purple or C.muted
         )
     end
 end
 
-local function updateHeadingIcon(sectionName)
-    for _, child in ipairs(headingIconHolder:GetChildren()) do
+local function updateHeadingIcon(name)
+    for _, child in ipairs(headingIcon:GetChildren()) do
         child:Destroy()
     end
 
-    local data = navButtons[sectionName]
+    local data = navButtons[name]
 
     if data then
         drawIcon(
-            headingIconHolder,
-            data.iconKind,
+            headingIcon,
+            data.kind,
             C.purple
         )
     end
 end
 
 -- ==========================================
--- FEATURE LIST
+-- FEATURE SYSTEM
 -- ==========================================
 
 local entries = {}
@@ -1155,11 +1511,15 @@ local showSection
 
 local function clearList()
     for _, obj in ipairs(list:GetChildren()) do
-        if obj ~= listLayout then obj:Destroy() end
+        if obj ~= listLayout then
+            obj:Destroy()
+        end
     end
 
     for _, obj in ipairs(categories:GetChildren()) do
-        if obj ~= categoryLayout then obj:Destroy() end
+        if obj ~= categoryLayout then
+            obj:Destroy()
+        end
     end
 
     table.clear(entries)
@@ -1185,35 +1545,46 @@ local function filter()
             currentCategory == "All"
             or entry.category == currentCategory
 
-        entry.object.Visible = matches and categoryMatches
+        entry.object.Visible =
+            matches and categoryMatches
     end
 end
 
 local function addCategory(name)
-    local b = create("TextButton", {
+    local button = create("TextButton", {
         Size = UDim2.fromOffset(
-            math.max(55, #name * 7 + 22), 27
+            math.max(55, #name * 7 + 22),
+            27
         ),
+
         BackgroundColor3 =
-            currentCategory == name and C.selected or C.bg,
+            currentCategory == name
+            and C.selected or C.bg,
+
         BorderSizePixel = 0,
+
         Text = name,
+
         TextColor3 =
-            currentCategory == name and C.text or C.muted,
-        Font = Enum.Font.GothamBold,
+            currentCategory == name
+            and C.text or C.muted,
+
+        Font = Enum.Font.GothamMedium,
         TextSize = 10
     }, categories)
 
-    corner(b, 6)
+    corner(button, 7)
 
-    bind(b.MouseButton1Click, function()
+    bind(button.MouseButton1Click, function()
         currentCategory = name
 
         for _, child in ipairs(categories:GetChildren()) do
             if child:IsA("TextButton") then
                 local selected = child.Text == name
+
                 child.BackgroundColor3 =
                     selected and C.selected or C.bg
+
                 child.TextColor3 =
                     selected and C.text or C.muted
             end
@@ -1224,41 +1595,85 @@ local function addCategory(name)
 end
 
 local function sectionTitle(value)
-    local t = label(list, value:upper(), 10, C.muted, true)
+    local t = label(
+        list,
+        value:upper(),
+        10,
+        C.muted,
+        "bold"
+    )
+
     t.Size = UDim2.new(1, -5, 0, 25)
+
     return t
 end
 
 local function feature(name, category, description, callback)
     local card = create("TextButton", {
         Size = UDim2.new(1, -5, 0, 56),
+
         BackgroundColor3 = C.card,
         BorderSizePixel = 0,
+
         Text = "",
         AutoButtonColor = false
     }, list)
 
-    corner(card, 8)
+    corner(card, 9)
     stroke(card)
 
-    local title = label(card, name, 12, C.text, true)
+    local title = label(
+        card,
+        name,
+        12,
+        C.text,
+        "bold"
+    )
+
     title.Position = UDim2.fromOffset(15, 8)
     title.Size = UDim2.new(1, -65, 0, 21)
 
-    local sub = label(card, description or category, 10, C.faint)
+    local sub = label(
+        card,
+        description or category,
+        10,
+        C.faint,
+        "regular"
+    )
+
     sub.Position = UDim2.fromOffset(15, 29)
     sub.Size = UDim2.new(1, -65, 0, 17)
 
-    local arrow = label(card, "›", 22, C.muted)
+    local arrow = label(
+        card,
+        "›",
+        22,
+        C.muted,
+        "regular"
+    )
+
     arrow.Position = UDim2.new(1, -29, 0, 10)
     arrow.Size = UDim2.fromOffset(19, 34)
     arrow.TextXAlignment = Enum.TextXAlignment.Center
+
+    bind(card.MouseEnter, function()
+        card.BackgroundColor3 = C.hover
+    end)
+
+    bind(card.MouseLeave, function()
+        card.BackgroundColor3 = C.card
+    end)
 
     bind(card.MouseButton1Click, function()
         callback(sub)
     end)
 
-    addEntry(card, name .. " " .. (description or ""), category)
+    addEntry(
+        card,
+        name .. " " .. (description or ""),
+        category
+    )
+
     return card
 end
 
@@ -1267,10 +1682,16 @@ local function toggle(name, key, category, callback)
         name,
         category,
         state[key] and "Enabled" or "Disabled",
+
         function(sub)
             state[key] = not state[key]
-            if callback then callback(state[key]) end
-            sub.Text = state[key] and "Enabled" or "Disabled"
+
+            if callback then
+                callback(state[key])
+            end
+
+            sub.Text =
+                state[key] and "Enabled" or "Disabled"
         end
     )
 end
@@ -1278,33 +1699,47 @@ end
 local function number(name, key, category, maximum, callback)
     local row = create("Frame", {
         Size = UDim2.new(1, -5, 0, 67),
+
         BackgroundColor3 = C.card,
         BorderSizePixel = 0
     }, list)
 
-    corner(row, 8)
+    corner(row, 9)
     stroke(row)
 
-    local title = label(row, name, 12, C.text, true)
+    local title = label(
+        row,
+        name,
+        12,
+        C.text,
+        "bold"
+    )
+
     title.Position = UDim2.fromOffset(15, 7)
     title.Size = UDim2.new(1, -110, 0, 23)
 
     local input = create("TextBox", {
         Position = UDim2.new(1, -91, 0, 9),
         Size = UDim2.fromOffset(75, 25),
+
         BackgroundColor3 = C.bg,
+
         Text = tostring(state[key]),
         TextColor3 = C.text,
-        Font = Enum.Font.Gotham,
+
+        Font = Enum.Font.GothamMedium,
         TextSize = 11,
+
         ClearTextOnFocus = false
     }, row)
 
-    corner(input, 5)
+    corner(input, 6)
 
     local track = create("Frame", {
         Position = UDim2.fromOffset(15, 48),
+
         Size = UDim2.new(1, -30, 0, 4),
+
         BackgroundColor3 = C.border,
         BorderSizePixel = 0
     }, row)
@@ -1313,8 +1748,10 @@ local function number(name, key, category, maximum, callback)
 
     local fill = create("Frame", {
         Size = UDim2.fromScale(
-            math.clamp(state[key] / maximum, 0, 1), 1
+            math.clamp(state[key] / maximum, 0, 1),
+            1
         ),
+
         BackgroundColor3 = C.purple,
         BorderSizePixel = 0
     }, track)
@@ -1329,12 +1766,24 @@ local function number(name, key, category, maximum, callback)
             return
         end
 
-        value = math.clamp(math.floor(value + 0.5), 0, maximum)
+        value = math.clamp(
+            math.floor(value + 0.5),
+            0,
+            maximum
+        )
+
         state[key] = value
         input.Text = tostring(value)
-        fill.Size = UDim2.fromScale(value / maximum, 1)
 
-        if callback then callback(value) end
+        fill.Size = UDim2.fromScale(
+            value / maximum,
+            1
+        )
+
+        if callback then
+            callback(value)
+        end
+
         save()
     end
 
@@ -1345,28 +1794,36 @@ local function number(name, key, category, maximum, callback)
     local sliding = false
 
     bind(track.InputBegan, function(i)
-        if i.UserInputType == Enum.UserInputType.MouseButton1 then
+        if i.UserInputType ==
+            Enum.UserInputType.MouseButton1 then
+
             sliding = true
+
             apply(
                 (i.Position.X - track.AbsolutePosition.X)
-                / math.max(track.AbsoluteSize.X, 1) * maximum
+                / math.max(track.AbsoluteSize.X, 1)
+                * maximum
             )
         end
     end)
 
     bind(UIS.InputChanged, function(i)
-        if sliding and
-            i.UserInputType == Enum.UserInputType.MouseMovement then
+        if sliding
+            and i.UserInputType ==
+            Enum.UserInputType.MouseMovement then
 
             apply(
                 (i.Position.X - track.AbsolutePosition.X)
-                / math.max(track.AbsoluteSize.X, 1) * maximum
+                / math.max(track.AbsoluteSize.X, 1)
+                * maximum
             )
         end
     end)
 
     bind(UIS.InputEnded, function(i)
-        if i.UserInputType == Enum.UserInputType.MouseButton1 then
+        if i.UserInputType ==
+            Enum.UserInputType.MouseButton1 then
+
             sliding = false
         end
     end)
@@ -1387,10 +1844,15 @@ sections.Commands = function()
     sectionTitle("Movement")
 
     toggle("Fly", "fly", "Movement", function(on)
-        if on then startFly() else stopFly() end
+        if on then
+            startFly()
+        else
+            stopFly()
+        end
     end)
 
     number("Fly Speed", "flySpeed", "Movement", 500)
+
     toggle("Fly Animation", "flyAnim", "Movement")
 
     toggle("Noclip", "noclip", "Movement", function(on)
@@ -1403,7 +1865,11 @@ sections.Commands = function()
     toggle("Click TP", "clickTP", "Movement")
 
     toggle("Air Walk", "airWalk", "Movement", function(on)
-        if on then startAirWalk() else stopAirWalk() end
+        if on then
+            startAirWalk()
+        else
+            stopAirWalk()
+        end
     end)
 
     number("WalkSpeed", "speed", "Movement", 500, function(v)
@@ -1413,6 +1879,7 @@ sections.Commands = function()
 
     number("JumpPower", "jump", "Movement", 500, function(v)
         local h = hum()
+
         if h then
             h.UseJumpPower = true
             h.JumpPower = v
@@ -1421,9 +1888,7 @@ sections.Commands = function()
 
     number("Dash Power", "dashPower", "Movement", 500)
 
-    feature("Dash", "Movement", "Press Q to dash", function()
-        dash()
-    end)
+    feature("Dash", "Movement", "Press Q to dash", dash)
 
     sectionTitle("Character")
 
@@ -1438,6 +1903,7 @@ sections.Commands = function()
 
     feature("Wave Emote", "Character", "Play wave", function()
         local h = hum()
+
         if h then
             pcall(function()
                 h:PlayEmote("wave")
@@ -1451,7 +1917,7 @@ sections.Commands = function()
 end
 
 -- ==========================================
--- PLAYER LIST
+-- PLAYER CARDS
 -- ==========================================
 
 local expandedUserId = nil
@@ -1468,8 +1934,11 @@ local function getThumbnail(player, image, generation)
             )
         end)
 
-        if ok and alive and generation == playerListGeneration
+        if ok
+            and alive
+            and generation == playerListGeneration
             and image.Parent then
+
             image.Image = thumbnail
         end
     end)
@@ -1477,8 +1946,9 @@ end
 
 local function teleportToPlayer(player)
     local r = root()
-    local target = player.Character and
-        player.Character:FindFirstChild("HumanoidRootPart")
+
+    local target = player.Character
+        and player.Character:FindFirstChild("HumanoidRootPart")
 
     if not r or not target then return end
 
@@ -1490,7 +1960,9 @@ local function teleportToPlayer(player)
     local c = char()
 
     if c then
-        c:PivotTo(target.CFrame * CFrame.new(3, 0, 0))
+        c:PivotTo(
+            target.CFrame * CFrame.new(3, 0, 0)
+        )
     end
 
     if state.airWalk then
@@ -1498,9 +1970,9 @@ local function teleportToPlayer(player)
     end
 end
 
--- Local-only physics demonstration.
 local function localFlingDemo()
     local r = root()
+
     if not r then return end
 
     local original = r.AssemblyAngularVelocity
@@ -1517,20 +1989,25 @@ end
 local function makePlayerCard(player, generation)
     local card = create("Frame", {
         Name = "Player_" .. player.UserId,
+
         Size = UDim2.new(1, -5, 0, 59),
+
         BackgroundColor3 = C.card,
         BorderSizePixel = 0,
+
         ClipsDescendants = true
     }, list)
 
-    corner(card, 9)
+    corner(card, 10)
     stroke(card)
 
     local avatar = create("ImageLabel", {
         Position = UDim2.fromOffset(12, 10),
         Size = UDim2.fromOffset(39, 39),
+
         BackgroundColor3 = C.selected,
         BorderSizePixel = 0,
+
         Image = "",
         ScaleType = Enum.ScaleType.Crop
     }, card)
@@ -1546,25 +2023,31 @@ local function makePlayerCard(player, generation)
         player.DisplayName,
         12,
         C.text,
-        true
+        "bold"
     )
 
     displayName.Position = UDim2.fromOffset(63, 10)
     displayName.Size = UDim2.new(1, -115, 0, 21)
-    displayName.TextTruncate = Enum.TextTruncate.AtEnd
 
     local username = label(
         card,
         "@" .. player.Name,
         10,
-        C.muted
+        C.muted,
+        "regular"
     )
 
     username.Position = UDim2.fromOffset(63, 31)
     username.Size = UDim2.new(1, -115, 0, 16)
-    username.TextTruncate = Enum.TextTruncate.AtEnd
 
-    local arrow = label(card, "⌄", 20, C.muted)
+    local arrow = label(
+        card,
+        "⌄",
+        20,
+        C.muted,
+        "medium"
+    )
+
     arrow.Position = UDim2.new(1, -29, 0, 10)
     arrow.Size = UDim2.fromOffset(19, 39)
     arrow.TextXAlignment = Enum.TextXAlignment.Center
@@ -1572,6 +2055,7 @@ local function makePlayerCard(player, generation)
     local clickArea = create("TextButton", {
         Position = UDim2.fromOffset(0, 0),
         Size = UDim2.new(1, 0, 0, 59),
+
         BackgroundTransparency = 1,
         Text = "",
         AutoButtonColor = false
@@ -1580,6 +2064,7 @@ local function makePlayerCard(player, generation)
     create("Frame", {
         Position = UDim2.fromOffset(12, 59),
         Size = UDim2.new(1, -24, 0, 1),
+
         BackgroundColor3 = C.border,
         BorderSizePixel = 0
     }, card)
@@ -1587,41 +2072,51 @@ local function makePlayerCard(player, generation)
     local actions = create("Frame", {
         Position = UDim2.fromOffset(12, 70),
         Size = UDim2.new(1, -24, 0, 33),
+
         BackgroundTransparency = 1
     }, card)
 
     local tp = create("TextButton", {
         Size = UDim2.new(0.48, 0, 1, 0),
+
         BackgroundColor3 = C.selected,
         BorderSizePixel = 0,
+
         Text = "TP",
         TextColor3 = C.text,
+
         Font = Enum.Font.GothamBold,
         TextSize = 11
     }, actions)
 
-    corner(tp, 6)
+    corner(tp, 7)
 
     local fling = create("TextButton", {
         Position = UDim2.new(0.52, 0, 0, 0),
         Size = UDim2.new(0.48, 0, 1, 0),
+
         BackgroundColor3 = C.selected,
         BorderSizePixel = 0,
+
         Text = "Fling",
         TextColor3 = C.text,
+
         Font = Enum.Font.GothamBold,
         TextSize = 11
     }, actions)
 
-    corner(fling, 6)
+    corner(fling, 7)
 
     local function setExpanded(expanded)
         card.Size = UDim2.new(
-            1, -5, 0,
+            1,
+            -5,
+            0,
             expanded and 114 or 59
         )
 
         arrow.Text = expanded and "⌃" or "⌄"
+
         card.BackgroundColor3 =
             expanded and C.hover or C.card
     end
@@ -1666,6 +2161,7 @@ sections.Players = function()
     addCategory("All")
 
     playerListGeneration += 1
+
     local generation = playerListGeneration
 
     table.clear(playerCards)
@@ -1684,9 +2180,11 @@ sections.Players = function()
 
     local info = label(
         list,
-        tostring(#playerList) .. " players · tap a player to view actions",
+        tostring(#playerList)
+            .. " players · tap a player to view actions",
         10,
-        C.muted
+        C.muted,
+        "regular"
     )
 
     info.Size = UDim2.new(1, -5, 0, 24)
@@ -1727,6 +2225,7 @@ sections.Actions = function()
 
     feature("Wave", "All", "Play wave emote", function()
         local h = hum()
+
         if h then
             pcall(function()
                 h:PlayEmote("wave")
@@ -1798,8 +2297,10 @@ sections.Settings = function()
             state.uiY = 0.5
 
             window.Position = UDim2.new(
-                0.5, -WIDTH / 2,
-                0.5, -HEIGHT / 2
+                0.5,
+                -WIDTH / 2,
+                0.5,
+                -HEIGHT / 2
             )
 
             save()
@@ -1819,7 +2320,7 @@ sections.Settings = function()
 end
 
 -- ==========================================
--- MENU NAVIGATION
+-- NAVIGATION
 -- ==========================================
 
 showSection = function(name)
@@ -1832,7 +2333,6 @@ showSection = function(name)
 
     heading.Text = name:lower()
 
-    -- V12: Heading icon always matches the selected menu.
     updateHeadingIcon(name)
 
     clearList()
@@ -1872,7 +2372,9 @@ local dragStart
 local startPosition
 
 bind(topbar.InputBegan, function(input)
-    if input.UserInputType == Enum.UserInputType.MouseButton1 then
+    if input.UserInputType ==
+        Enum.UserInputType.MouseButton1 then
+
         dragging = true
         dragStart = input.Position
         startPosition = window.Position
@@ -1880,14 +2382,16 @@ bind(topbar.InputBegan, function(input)
 end)
 
 bind(UIS.InputChanged, function(input)
-    if dragging and
-        input.UserInputType == Enum.UserInputType.MouseMovement then
+    if dragging
+        and input.UserInputType ==
+        Enum.UserInputType.MouseMovement then
 
         local delta = input.Position - dragStart
 
         window.Position = UDim2.new(
             startPosition.X.Scale,
             startPosition.X.Offset + delta.X,
+
             startPosition.Y.Scale,
             startPosition.Y.Offset + delta.Y
         )
@@ -1895,7 +2399,8 @@ bind(UIS.InputChanged, function(input)
 end)
 
 bind(UIS.InputEnded, function(input)
-    if input.UserInputType == Enum.UserInputType.MouseButton1
+    if input.UserInputType ==
+        Enum.UserInputType.MouseButton1
         and dragging then
 
         dragging = false
@@ -1908,12 +2413,16 @@ bind(UIS.InputEnded, function(input)
             if size.X > 0 and size.Y > 0 then
                 state.uiX = math.clamp(
                     (window.AbsolutePosition.X + WIDTH / 2)
-                    / size.X, 0, 1
+                    / size.X,
+                    0,
+                    1
                 )
 
                 state.uiY = math.clamp(
                     (window.AbsolutePosition.Y + HEIGHT / 2)
-                    / size.Y, 0, 1
+                    / size.Y,
+                    0,
+                    1
                 )
 
                 save()
@@ -1928,7 +2437,9 @@ end)
 
 bind(UIS.InputBegan, function(input, processed)
     if changingHotkey then
-        if input.UserInputType == Enum.UserInputType.Keyboard then
+        if input.UserInputType ==
+            Enum.UserInputType.Keyboard then
+
             changingHotkey = false
 
             if input.KeyCode ~= Enum.KeyCode.Escape
@@ -1944,9 +2455,13 @@ bind(UIS.InputBegan, function(input, processed)
         return
     end
 
-    if processed or UIS:GetFocusedTextBox() then return end
+    if processed or UIS:GetFocusedTextBox() then
+        return
+    end
 
-    if input.UserInputType == Enum.UserInputType.Keyboard then
+    if input.UserInputType ==
+        Enum.UserInputType.Keyboard then
+
         if input.KeyCode.Name == state.menuKey then
             window.Visible = not window.Visible
         end
@@ -1957,7 +2472,9 @@ bind(UIS.InputBegan, function(input, processed)
             local h = hum()
 
             if h then
-                h:ChangeState(Enum.HumanoidStateType.Jumping)
+                h:ChangeState(
+                    Enum.HumanoidStateType.Jumping
+                )
             end
         end
 
@@ -1967,18 +2484,41 @@ bind(UIS.InputBegan, function(input, processed)
     end
 
     if state.clickTP
-        and input.UserInputType == Enum.UserInputType.MouseButton1 then
+        and input.UserInputType ==
+        Enum.UserInputType.MouseButton1 then
 
-        local pos = UIS:GetMouseLocation()
+        local position = UIS:GetMouseLocation()
+
         local overUI = false
 
-        for _, obj in ipairs(
-            parent:GetGuiObjectsAtPosition(pos.X, pos.Y)
-        ) do
-            if obj:IsDescendantOf(gui) then
-                overUI = true
-                break
+        -- PlayerGui supports this method; CoreGui
+        -- containers may not, so guard the call.
+        local ok, guiObjects = pcall(function()
+            return parent:GetGuiObjectsAtPosition(
+                position.X,
+                position.Y
+            )
+        end)
+
+        if ok then
+            for _, obj in ipairs(guiObjects) do
+                if obj:IsDescendantOf(gui) then
+                    overUI = true
+                    break
+                end
             end
+        else
+            local x = window.AbsolutePosition.X
+            local y = window.AbsolutePosition.Y
+            local w = window.AbsoluteSize.X
+            local h = window.AbsoluteSize.Y
+
+            overUI =
+                window.Visible
+                and position.X >= x
+                and position.X <= x + w
+                and position.Y >= y
+                and position.Y <= y + h
         end
 
         if not overUI then
@@ -1987,18 +2527,32 @@ bind(UIS.InputBegan, function(input, processed)
 
             if camera and r then
                 local ray = camera:ViewportPointToRay(
-                    pos.X, pos.Y
+                    position.X,
+                    position.Y
                 )
 
                 local params = RaycastParams.new()
-                params.FilterType = Enum.RaycastFilterType.Exclude
+
+                params.FilterType =
+                    Enum.RaycastFilterType.Exclude
 
                 local excluded = {}
 
-                if char() then table.insert(excluded, char()) end
-                if visualAvatar then table.insert(excluded, visualAvatar) end
-                if invisibleFloor then table.insert(excluded, invisibleFloor) end
-                if airPlatform then table.insert(excluded, airPlatform) end
+                if char() then
+                    table.insert(excluded, char())
+                end
+
+                if visualAvatar then
+                    table.insert(excluded, visualAvatar)
+                end
+
+                if invisibleFloor then
+                    table.insert(excluded, invisibleFloor)
+                end
+
+                if airPlatform then
+                    table.insert(excluded, airPlatform)
+                end
 
                 params.FilterDescendantsInstances = excluded
 
@@ -2019,7 +2573,8 @@ bind(UIS.InputBegan, function(input, processed)
                     if c then
                         c:PivotTo(
                             CFrame.new(
-                                hit.Position + Vector3.new(0, 3.5, 0)
+                                hit.Position
+                                    + Vector3.new(0, 3.5, 0)
                             )
                         )
                     end
@@ -2066,6 +2621,7 @@ bind(Run.RenderStepped, function()
 
     if state.fly and flyVelocity and flyGyro then
         local camera = workspace.CurrentCamera
+
         if not camera then return end
 
         local cf = camera.CFrame
@@ -2144,6 +2700,10 @@ bind(LP.CharacterAdded, function(c)
     end
 end)
 
+-- ==========================================
+-- INITIALIZE
+-- ==========================================
+
 local h = hum()
 
 if h then
@@ -2194,8 +2754,12 @@ _G.KHASTIFY_HUB_CLEANUP = function()
     end
 
     gui:Destroy()
+
     _G.KHASTIFY_HUB_CLEANUP = nil
 end
 
-print("KHASTIFY'S UNIVERSAL HUB V12 LOADED")
+print("====================================")
+print("KHASTIFY'S UNIVERSAL HUB V13")
+print("UI POLISH UPDATE")
 print("Press " .. state.menuKey .. " to open the menu.")
+print("====================================")
