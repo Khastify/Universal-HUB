@@ -1,25 +1,24 @@
 --[[
-    KHASTIFY'S UNIVERSAL HUB V49
+    KHASTIFY'S UNIVERSAL HUB V50
 
     NEW:
-    - Spy button in Players
-    - Stop Spy toggle
-    - Stationary underground character
-    - Camera follows selected player
-    - Automatic restoration when target leaves
-    - Target respawn support
-    - Switching between spy targets
-    - Cleanup on local respawn / hub unload
+    - Stop Spy button in Players page header
+    - Visible only while Spy is active
+    - Purple button with white text
+    - Restores character and camera when clicked
+    - Automatically disappears when Spy ends
 
     PRESERVED:
-    - Commands / Players / Servers icons
+    - V49 Spy system
+    - Player TP / Fling / Spy
+    - Original Commands icon
+    - Original Players icon
+    - Original Servers icon
     - Centered Settings text
     - Four sidebar tabs
-    - Existing Commands
-    - Player TP and Fling
-    - Server browser and HTTP 429 handling
+    - Existing commands
     - Auto Execute
-    - Saved keybinds
+    - Server browser / HTTP 429 handling
 
     K = Toggle Hub
     Q = Dash
@@ -149,7 +148,7 @@ local C = {
 }
 
 --==================================================
--- ICON ENGINE - V48 UNCHANGED
+-- ICON ENGINE
 --==================================================
 
 local ICON_SIZE = 120
@@ -223,6 +222,10 @@ local function IconLine(parent, x1, y1, x2, y2, color, thickness)
     return line
 end
 
+--==================================================
+-- COMMANDS ICON - UNCHANGED
+--==================================================
+
 local function DrawCommands(parent, color)
     IconOutline(parent, 15, 23, 90, 74, color, 8, 12)
 
@@ -230,6 +233,10 @@ local function DrawCommands(parent, color)
     IconLine(parent, 48, 60, 32, 75, color, 9)
     IconLine(parent, 57, 76, 84, 76, color, 9)
 end
+
+--==================================================
+-- PLAYERS ICON - UNCHANGED
+--==================================================
 
 local function DrawPlayers(parent, color)
     IconCircle(parent, 76, 20, 25, color, 7)
@@ -260,6 +267,10 @@ local function DrawPlayers(parent, color)
 
     head.ZIndex = 5
 end
+
+--==================================================
+-- SERVERS ICON - UNCHANGED
+--==================================================
 
 local function DrawServers(parent, color)
     local function Rack(y)
@@ -710,7 +721,7 @@ local function Dash()
 end
 
 --==================================================
--- INVISIBILITY - V48 TECHNIQUE PRESERVED
+-- INVISIBILITY
 --==================================================
 
 local OFFSET = 11
@@ -1242,7 +1253,7 @@ local function Fullbright(enabled)
 end
 
 --==================================================
--- V49 SPY SYSTEM
+-- SPY SYSTEM
 --==================================================
 
 local Spy = {
@@ -1268,6 +1279,7 @@ local Spy = {
 }
 
 local UpdateSpyButtons = function() end
+local UpdateHeaderSpyButton = function() end
 
 local function DisconnectSpyTarget()
     if Spy.targetCharacterConnection then
@@ -1369,7 +1381,6 @@ local function StopSpy()
     Spy.active = false
     Spy.target = nil
 
-    -- Restore the exact original position.
     if savedCharacter
         and savedCharacter.Parent
         and savedCharacter == Char() then
@@ -1406,6 +1417,9 @@ local function StopSpy()
     Spy.savedCameraMaxZoom = nil
 
     UpdateSpyButtons()
+
+    -- V50: Hide the header Stop Spy button.
+    UpdateHeaderSpyButton()
 end
 
 local function WatchSpyTarget(player)
@@ -1447,20 +1461,20 @@ local function StartSpy(player)
         return
     end
 
-    -- Clicking the same player stops Spy.
     if Spy.active and Spy.target == player then
         StopSpy()
         return
     end
 
-    -- Switching targets keeps your character underground.
     if Spy.active then
         Spy.generation += 1
         Spy.target = player
 
         WatchSpyTarget(player)
         ApplySpyCamera(player)
+
         UpdateSpyButtons()
+        UpdateHeaderSpyButton()
 
         return
     end
@@ -1474,12 +1488,10 @@ local function StartSpy(player)
         return
     end
 
-    -- Ensure the target is currently available.
     if not GetTargetHumanoid(player) then
         return
     end
 
-    -- Disable conflicting movement modes before Spy.
     if State.fly then
         State.fly = false
         StopFly()
@@ -1495,7 +1507,6 @@ local function StartSpy(player)
         SetInvisible(false)
     end
 
-    -- Save the exact original character position.
     Spy.savedPivot = character:GetPivot()
     Spy.savedCharacter = character
     Spy.savedRoot = root
@@ -1514,10 +1525,6 @@ local function StartSpy(player)
     Spy.target = player
     Spy.generation += 1
 
-    -- Move down exactly once.
-    --
-    -- This does not follow the target.
-    -- Your underground position stays fixed.
     local undergroundPivot =
         Spy.savedPivot + Vector3.new(0, -OFFSET, 0)
 
@@ -1526,20 +1533,20 @@ local function StartSpy(player)
     root.AssemblyLinearVelocity = Vector3.zero
     root.AssemblyAngularVelocity = Vector3.zero
 
-    -- Lock your character underground.
     root.Anchored = true
     humanoid.AutoRotate = false
 
-    -- Allow normal camera rotation and zoom.
     pcall(function()
         LP.CameraMode = Enum.CameraMode.Classic
     end)
 
-    -- Follow the selected player's Humanoid.
     WatchSpyTarget(player)
     ApplySpyCamera(player)
 
     UpdateSpyButtons()
+
+    -- V50: Show the header Stop Spy button.
+    UpdateHeaderSpyButton()
 end
 
 local function ToggleSpy(player)
@@ -1550,7 +1557,6 @@ local function ToggleSpy(player)
     end
 end
 
--- Automatically restore when target leaves.
 Bind(Players.PlayerRemoving, function(player)
     if Spy.active and Spy.target == player then
         StopSpy()
@@ -1618,7 +1624,7 @@ Brand.Position = UDim2.fromOffset(24, 31)
 Brand.Size = UDim2.fromOffset(135, 25)
 
 local Version = Label(
-    Sidebar, "universal hub v49", 11, C.muted
+    Sidebar, "universal hub v50", 11, C.muted
 )
 
 Version.Position = UDim2.fromOffset(24, 57)
@@ -1667,6 +1673,68 @@ local Minimize = Create("TextButton", {
     Font = Enum.Font.GothamMedium,
     TextSize = 20
 }, Topbar)
+
+--==================================================
+-- V50 HEADER STOP SPY BUTTON
+--==================================================
+
+local HeaderStopSpy = Create("TextButton", {
+    Name = "HeaderStopSpy",
+
+    AnchorPoint = Vector2.new(1, 0.5),
+
+    -- Right edge is 80px from the topbar's right edge.
+    -- This leaves room for the minimize and close buttons.
+    Position = UDim2.new(1, -80, 0, 28),
+
+    Size = UDim2.fromOffset(88, 29),
+
+    BackgroundColor3 = C.purple,
+    BorderSizePixel = 0,
+
+    Text = "Stop Spy",
+    TextColor3 = Color3.fromRGB(255, 255, 255),
+
+    Font = Enum.Font.GothamBold,
+    TextSize = 12,
+
+    AutoButtonColor = false,
+
+    Visible = false,
+    ZIndex = 5
+}, Topbar)
+
+Corner(HeaderStopSpy, 7)
+
+Bind(HeaderStopSpy.MouseEnter, function()
+    if HeaderStopSpy.Visible then
+        Tween(HeaderStopSpy, {
+            BackgroundColor3 = Color3.fromRGB(175, 118, 255)
+        }, 0.15)
+    end
+end)
+
+Bind(HeaderStopSpy.MouseLeave, function()
+    Tween(HeaderStopSpy, {
+        BackgroundColor3 = C.purple
+    }, 0.15)
+end)
+
+Bind(HeaderStopSpy.MouseButton1Click, function()
+    if Spy.active then
+        StopSpy()
+    end
+end)
+
+UpdateHeaderSpyButton = function()
+    HeaderStopSpy.Visible =
+        Spy.active
+        and Active == "Players"
+
+    if HeaderStopSpy.Visible then
+        HeaderStopSpy.BackgroundColor3 = C.purple
+    end
+end
 
 --==================================================
 -- SEARCH / CATEGORIES / LIST
@@ -2362,7 +2430,7 @@ Sections.Commands = function()
 end
 
 --==================================================
--- V49 PLAYER BROWSER
+-- PLAYER BROWSER
 --==================================================
 
 local PlayerCards = {}
@@ -2379,7 +2447,6 @@ local function ClearPlayerCards()
     table.clear(PlayerCards)
 end
 
--- Updates every visible Spy button.
 UpdateSpyButtons = function()
     for userId, data in pairs(PlayerCards) do
         local button = data.spyButton
@@ -2475,7 +2542,6 @@ local function MakePlayerCard(player, order)
         BackgroundTransparency = 1
     }, card)
 
-    -- V49: Three equal-width buttons.
     local function Button(text, index, callback)
         local button = Create("TextButton", {
             Position = UDim2.new(
@@ -2500,9 +2566,7 @@ local function MakePlayerCard(player, order)
         return button
     end
 
-    --==================================================
     -- TP
-    --==================================================
 
     local tp = Button("TP", 1, function()
         local target = player.Character
@@ -2513,7 +2577,6 @@ local function MakePlayerCard(player, order)
         local c = Char()
 
         if target and c then
-            -- Restore your character before teleporting.
             if Spy.active then
                 StopSpy()
             end
@@ -2529,9 +2592,7 @@ local function MakePlayerCard(player, order)
         end
     end)
 
-    --==================================================
-    -- FLING - ORIGINAL BEHAVIOR
-    --==================================================
+    -- FLING
 
     local fling = Button("Fling", 2, function()
         if Spy.active then
@@ -2553,9 +2614,7 @@ local function MakePlayerCard(player, order)
         end)
     end)
 
-    --==================================================
-    -- SPY - NEW V49 BUTTON
-    --==================================================
+    -- SPY
 
     local spyButton = Button("Spy", 3, function()
         ToggleSpy(player)
@@ -3414,7 +3473,7 @@ Sections.Settings = function()
 
     local title = Label(
         card,
-        "V49 GUI Icons",
+        "V50 GUI Icons",
         14,
         C.text,
         true
@@ -3443,7 +3502,7 @@ Sections.Settings = function()
     description.Position = UDim2.fromOffset(14, 55)
     description.Size = UDim2.new(1, -28, 0, 17)
 
-    AddEntry(card, "v49 icon system", "All")
+    AddEntry(card, "v50 icon system", "All")
 end
 
 --==================================================
@@ -3479,6 +3538,9 @@ ShowSection = function(name)
     else
         Heading.Position = UDim2.fromOffset(55, 15)
     end
+
+    -- V50: Only show header Stop Spy on Players.
+    UpdateHeaderSpyButton()
 
     ClearList()
 
@@ -3784,8 +3846,6 @@ Bind(Run.Heartbeat, function()
         UpdateInvisible()
     end
 
-    -- V49: Keep the local character at its original
-    -- underground position while Spy is active.
     if Spy.active then
         local c = Spy.savedCharacter
         local spyRoot = Spy.savedRoot
@@ -3797,8 +3857,6 @@ Bind(Run.Heartbeat, function()
             local undergroundPivot =
                 Spy.savedPivot + Vector3.new(0, -OFFSET, 0)
 
-            -- Correct any displacement without
-            -- moving toward the target.
             if (c:GetPivot().Position
                 - undergroundPivot.Position).Magnitude > 0.1 then
 
@@ -3813,7 +3871,6 @@ Bind(Run.Heartbeat, function()
             spyRoot.AssemblyAngularVelocity = Vector3.zero
         end
 
-        -- If the target is gone, restore immediately.
         if not Spy.target or not Spy.target.Parent then
             StopSpy()
         end
@@ -3894,7 +3951,6 @@ end)
 --==================================================
 
 Bind(LP.CharacterAdded, function(c)
-    -- Spy ends if your own character respawns.
     if Spy.active then
         StopSpy()
     end
@@ -3966,7 +4022,6 @@ _G.KHASTIFY_HUB_CLEANUP = function()
     Alive = false
     PlayerGeneration += 1
 
-    -- V49: Restore Spy before unloading anything.
     if Spy.active then
         StopSpy()
     end
@@ -4009,12 +4064,10 @@ _G.KHASTIFY_HUB_CLEANUP = function()
 end
 
 print("====================================")
-print("KHASTIFY'S UNIVERSAL HUB V49")
-print("NEW PLAYER SPY FEATURE")
-print("STATIONARY UNDERGROUND CHARACTER")
-print("SPY / STOP SPY TOGGLE")
-print("AUTO RESTORE WHEN TARGET LEAVES")
-print("TARGET RESPAWN SUPPORT")
+print("KHASTIFY'S UNIVERSAL HUB V50")
+print("NEW HEADER STOP SPY BUTTON")
+print("VISIBLE ONLY WHILE SPYING")
+print("V49 SPY SYSTEM PRESERVED")
 print("ORIGINAL ICONS PRESERVED")
 print("AUTO EXECUTE PRESERVED")
 print("HTTP 429 HANDLING PRESERVED")
