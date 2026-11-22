@@ -1,30 +1,15 @@
 --[[
-    KHASTIFY'S UNIVERSAL HUB V37
+    KHASTIFY'S UNIVERSAL HUB V38
 
-    V37:
-    - Six icons embedded directly into Lua
-    - No Roblox image/decal IDs
-    - No external icon downloads
-    - One optimized transparent sprite sheet
-    - Consistent icon sizing
-    - Purple selected / gray unselected
-    - On-screen icon diagnostics
-    - Automatic local icon caching
-
-    PRESERVED:
-    - Auto Execute
-    - Commands
-    - Voice Chat
-    - Players
-    - Actions
-    - Servers > All
-    - Settings
-    - Custom keybinds
-    - Fly / Noclip / Infinite Jump
-    - Click TP / Air Walk / Dash
-    - Invisible / Headless / Freeze
-    - Fullbright / Player TP
-    - Public server browser
+    V38:
+    - Six high-resolution GUI-drawn icons
+    - 120x120 drawing coordinates, scaled to 30x30
+    - No image assets, downloads, or custom assets
+    - Purple selected / gray unselected icons
+    - HTTP 429 automatic retry and backoff
+    - Retry-After support
+    - Refresh cooldown
+    - Server list preserved during temporary failures
 
     K = Toggle Hub
     Q = Dash
@@ -151,205 +136,370 @@ local C = {
 }
 
 --==================================================
--- V37 EMBEDDED ICON DATA
+-- V38 HIGH-RESOLUTION ICON ENGINE
 --==================================================
 
--- 384x64 PNG sprite sheet.
--- Six 64x64 icon cells, ordered:
--- Commands, Voice, Players, Actions, Servers, Settings.
---
--- White shapes on transparent background.
--- ImageColor3 controls their displayed color.
+local ICON_DRAW_SIZE = 120
+local ICON_DISPLAY_SIZE = 30
+local ICON_SCALE = ICON_DISPLAY_SIZE / ICON_DRAW_SIZE
 
-local EMBEDDED_ICONS = table.concat({
+local function IconFrame(parent, x, y, w, h, color, radius)
+    local frame = Create("Frame", {
+        Position = UDim2.fromOffset(x, y),
+        Size = UDim2.fromOffset(w, h),
+        BackgroundColor3 = color,
+        BorderSizePixel = 0
+    }, parent)
 
-"iVBORw0KGgoAAAANSUhEUgAAAYAAAABACAMAAAAkhlCNAAAABlBMVEUAAAD///+l2Z/dAAAAAnRSTlMA/1uRIrpZEAWYtiB6bJ16NuLbGCc6CZ6jJdKfb63//6c7k2mb2JK4dSSBmT7UtWJgjYBFKVFJSUlJSUlJSUnJhwke",
-"cowu32Y//uWUd+Gr7MdFvjAWN5sPnIQACgB8m//p74l7rMdJACxV4dXvViSgFI//dyKgVACIO+B5QwOAdm0KBDEAkgFTKpBif+825VogEYEIANkxM8H/ww+DAgBkPF8yJwBA9q4V0Nhs/+9f7vc8f5fWImuD8AMw",
-"WuNFxBazMfsxTLcQE7F9k5gDwGCROyhMIRu0/6Jw80fhQfYsuRIA97ZkS1oJALh9dwgAkAGAy/8GANxotZcxuPRGACBEKxnrZm0scE4E/3Q2B5wKgLuhgBsAsIWlKpOOcxnv0sg+dhgAliX3aAsDwOylCczRLACQ",
-"CQDWA0D9W64rFdSdKgudHgEO8iqaA2j0IXIbcFuq0WBdFRSuZ22VpbMKamKEcy8Yl2qUFiMJ481kDQDtmsfPvD6g0ZjdYfr46clbiQzhAIDRcWo2UcfsTAKgSRLCDjO+QYXAMgB4figRgCgX1CTdzioxgvQDjHkA",
-"EM8Ehf2fxMbL/iPjDd0ebgcA3eo9Xs2qZ1lONjoZAFK8LrMA6D589vtvRoA+NwLCWXKF/ycDEMwB4Dsqew5wMtAT/e/KAaQFIFAFkQzAZDo65H8LxNw11r8igpE+gNjuSYNrlItwTrHT+wC4+wCmAmyOGnFvx6ih",
-"MvvOdsoucopgXics+n/EBQ3sEA9m9GpHdx2Yg8BsMo5zEGSqrc+GIgLAnXkyHWkKIOAi5LIHMgwdrZgHQBgRkr6nv6d2WgiA+Shf4jyA+pEvzwNo1AE1kSGZrbmqLQN9Z323TsTcI0l1bJMFgSAT4AqByEAGbGOi",
-"G8pjSKpMBqDN9GEmxnXcPTCQyTkV0Xvtck7GUX4hkg+AI18EaRHj8Yt8BSR3BpiACAD0FgAkn44mVx2eCYDrDEXsVm4kNsow0wCwjrGmAZDA4antv3MnLbmW9wUBm01R++1VkPdrOTH77y8LR+fENDAZlUEjOzNA",
-"Eo/tHWxyvVRAB6tNtF5c84SM9+8as681Y+73rt4DANr55Kax2KHTLj/s8/+t3mma7NV7QPIX7tIaldUu2Prw9Uoc4f8C4CAANsO/XAkc8k+iNvq/pKSkpKSkpKSkhJMfmZYV1LurJH8AAAAASUVORK5CYII="
-
-})
-
-local IconOrder = {
-    commands = 0,
-    voice = 1,
-    players = 2,
-    actions = 3,
-    servers = 4,
-    settings = 5
-}
-
-local IconStatus = "Initializing..."
-local IconAsset = nil
-
-local ICON_FOLDER = "KHASTIFY_Icons"
-local ICON_FILE = ICON_FOLDER .. "/V37_Sprite.png"
-
---==================================================
--- BASE64 DECODER
---==================================================
-
-local BASE64_CHARS =
-    "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/"
-
-local function DecodeBase64(data)
-    data = data:gsub("[^" .. BASE64_CHARS .. "=]", "")
-
-    local output = {}
-    local buffer = 0
-    local bits = 0
-
-    for i = 1, #data do
-        local char = data:sub(i, i)
-
-        if char == "=" then
-            break
-        end
-
-        local index = BASE64_CHARS:find(char, 1, true)
-
-        if index then
-            buffer = buffer * 64 + (index - 1)
-            bits += 6
-
-            if bits >= 8 then
-                bits -= 8
-
-                local value = math.floor(buffer / (2 ^ bits)) % 256
-
-                output[#output + 1] = string.char(value)
-
-                buffer = buffer % (2 ^ bits)
-            end
-        end
+    if radius then
+        Corner(frame, radius)
     end
 
-    return table.concat(output)
+    return frame
 end
 
---==================================================
--- LOCAL ASSET INITIALIZATION
---==================================================
+local function IconLine(parent, x1, y1, x2, y2, color, thickness)
+    local dx = x2 - x1
+    local dy = y2 - y1
+    local length = math.sqrt(dx * dx + dy * dy)
 
-local function InitializeIcons()
-    local customAsset = getcustomasset or getsynasset
+    local line = Create("Frame", {
+        AnchorPoint = Vector2.new(0.5, 0.5),
+        Position = UDim2.fromOffset(
+            (x1 + x2) / 2,
+            (y1 + y2) / 2
+        ),
+        Size = UDim2.fromOffset(length, thickness),
+        Rotation = math.deg(math.atan2(dy, dx)),
+        BackgroundColor3 = color,
+        BorderSizePixel = 0
+    }, parent)
 
-    if type(customAsset) ~= "function" then
-        IconStatus = "Custom assets unsupported"
-        return false
-    end
-
-    if type(writefile) ~= "function" then
-        IconStatus = "File writing unsupported"
-        return false
-    end
-
-    local path = ICON_FILE
-
-    if type(makefolder) == "function"
-        and type(isfolder) == "function" then
-
-        local exists = false
-
-        pcall(function()
-            exists = isfolder(ICON_FOLDER)
-        end)
-
-        if not exists then
-            local ok = pcall(function()
-                makefolder(ICON_FOLDER)
-            end)
-
-            if not ok then
-                path = "KHASTIFY_V37_Sprite.png"
-            end
-        end
-    else
-        path = "KHASTIFY_V37_Sprite.png"
-    end
-
-    local bytes = DecodeBase64(EMBEDDED_ICONS)
-
-    if bytes:sub(1, 8) ~= "\137PNG\r\n\26\n" then
-        IconStatus = "Embedded PNG invalid"
-        return false
-    end
-
-    local saved = pcall(function()
-        writefile(path, bytes)
-    end)
-
-    if not saved then
-        IconStatus = "Unable to cache sprite"
-        return false
-    end
-
-    local ok, asset = pcall(function()
-        return customAsset(path)
-    end)
-
-    if not ok or type(asset) ~= "string" or asset == "" then
-        IconStatus = "Custom asset loading failed"
-        return false
-    end
-
-    IconAsset = asset
-    IconStatus = "Embedded sprite loaded"
-
-    return true
+    Corner(line, thickness / 2)
+    return line
 end
 
-InitializeIcons()
+local function IconCircle(parent, x, y, diameter, color, thickness)
+    local circle = IconFrame(
+        parent,
+        x,
+        y,
+        diameter,
+        diameter,
+        color,
+        diameter / 2
+    )
 
---==================================================
--- ICON RENDERING
---==================================================
+    if thickness then
+        circle.BackgroundTransparency = 1
 
-local function DrawIcon(parent, kind, color)
-    local index = IconOrder[kind]
-
-    if IconAsset and index then
-        return Create("ImageLabel", {
-            Name = kind .. "Icon",
-            AnchorPoint = Vector2.new(0.5, 0.5),
-            Position = UDim2.fromScale(0.5, 0.5),
-            Size = UDim2.fromOffset(30, 30),
-            BackgroundTransparency = 1,
-            BorderSizePixel = 0,
-            Image = IconAsset,
-            ImageColor3 = color or C.muted,
-            ImageTransparency = 0,
-            ScaleType = Enum.ScaleType.Stretch,
-            ImageRectOffset = Vector2.new(index * 64, 0),
-            ImageRectSize = Vector2.new(64, 64)
-        }, parent)
+        Create("UIStroke", {
+            Color = color,
+            Thickness = thickness,
+            ApplyStrokeMode = Enum.ApplyStrokeMode.Border
+        }, circle)
     end
 
-    local fallback = {
-        commands = ">_",
-        voice = "MIC",
-        players = "II",
-        actions = "!",
-        servers = "==",
-        settings = "*"
+    return circle
+end
+
+local function IconOutline(parent, x, y, w, h, color, thickness, radius)
+    local frame = IconFrame(
+        parent,
+        x,
+        y,
+        w,
+        h,
+        color,
+        radius or 8
+    )
+
+    frame.BackgroundTransparency = 1
+
+    Stroke(frame, color, thickness)
+
+    return frame
+end
+
+local function IconPolygon(parent, points, color, thickness)
+    for i = 1, #points do
+        local a = points[i]
+        local b = points[i % #points + 1]
+
+        IconLine(
+            parent,
+            a[1], a[2],
+            b[1], b[2],
+            color,
+            thickness
+        )
+    end
+end
+
+local function DrawCommands(parent, color)
+    -- Terminal prompt, symmetrical outline.
+    IconOutline(parent, 15, 23, 90, 74, color, 8, 12)
+
+    IconLine(parent, 32, 45, 48, 60, color, 9)
+    IconLine(parent, 48, 60, 32, 75, color, 9)
+    IconLine(parent, 57, 76, 84, 76, color, 9)
+end
+
+local function DrawVoice(parent, color)
+    -- Capsule microphone.
+    local capsule = IconFrame(
+        parent, 43, 16, 34, 57, color, 17
+    )
+
+    -- U-shaped microphone support.
+    IconLine(parent, 28, 51, 28, 68, color, 8)
+    IconLine(parent, 92, 51, 92, 68, color, 8)
+
+    -- Smooth curved bottom constructed from a circular arc.
+    local previousX
+    local previousY
+
+    for i = 0, 24 do
+        local angle = math.rad(i * 180 / 24)
+
+        local x = 60 - 32 * math.cos(angle)
+        local y = 68 + 30 * math.sin(angle)
+
+        if previousX then
+            IconLine(
+                parent,
+                previousX,
+                previousY,
+                x,
+                y,
+                color,
+                8
+            )
+        end
+
+        previousX = x
+        previousY = y
+    end
+
+    IconLine(parent, 60, 98, 60, 109, color, 8)
+end
+
+local function DrawPlayers(parent, color)
+    -- Two overlapping people, with consistent outlines.
+    IconCircle(parent, 76, 20, 25, color, 7)
+
+    IconOutline(
+        parent,
+        57, 55, 51, 43,
+        color, 7, 16
+    )
+
+    -- Front figure masks the rear outline.
+    local mask = IconFrame(
+        parent,
+        14, 54, 68, 53,
+        C.side,
+        18
+    )
+
+    mask.ZIndex = 3
+
+    local body = IconOutline(
+        parent,
+        14, 54, 68, 53,
+        color, 7, 18
+    )
+
+    body.ZIndex = 4
+
+    local head = IconCircle(
+        parent,
+        29, 15, 34,
+        color, 7
+    )
+
+    head.ZIndex = 5
+end
+
+local function DrawActions(parent, color)
+    -- Lightning bolt drawn as a solid, tapered silhouette.
+    -- Closely spaced strokes create a filled shape.
+    local outline = {
+        {67, 9},
+        {28, 65},
+        {54, 65},
+        {44, 111},
+        {94, 48},
+        {66, 48}
     }
 
-    return Create("TextLabel", {
-        Name = kind .. "Fallback",
+    -- Fill the lightning silhouette using horizontal scanlines.
+    local function Intersections(y)
+        local xs = {}
+
+        for i = 1, #outline do
+            local a = outline[i]
+            local b = outline[i % #outline + 1]
+
+            local y1, y2 = a[2], b[2]
+
+            if (y >= math.min(y1, y2))
+                and (y < math.max(y1, y2))
+                and y1 ~= y2 then
+
+                local t = (y - y1) / (y2 - y1)
+
+                table.insert(
+                    xs,
+                    a[1] + (b[1] - a[1]) * t
+                )
+            end
+        end
+
+        table.sort(xs)
+        return xs
+    end
+
+    for y = 10, 109, 2 do
+        local xs = Intersections(y)
+
+        for i = 1, #xs - 1, 2 do
+            IconFrame(
+                parent,
+                xs[i],
+                y,
+                math.max(1, xs[i + 1] - xs[i]),
+                2.5,
+                color
+            )
+        end
+    end
+end
+
+local function DrawServers(parent, color)
+    -- Two identical stacked server racks.
+    local function Rack(y)
+        IconOutline(
+            parent,
+            13, y, 94, 35,
+            color, 8, 10
+        )
+
+        IconCircle(
+            parent,
+            28, y + 13,
+            9, color
+        )
+
+        IconLine(
+            parent,
+            65, y + 18,
+            88, y + 18,
+            color, 8
+        )
+    end
+
+    Rack(19)
+    Rack(66)
+end
+
+local function DrawSettings(parent, color)
+    -- Symmetrical eight-tooth gear.
+    local cx, cy = 60, 60
+    local teeth = 8
+
+    -- Thick circular body built from short line segments.
+    local previousX
+    local previousY
+
+    for i = 0, 96 do
+        local angle = i * math.pi * 2 / 96
+
+        local x = cx + math.cos(angle) * 34
+        local y = cy + math.sin(angle) * 34
+
+        if previousX then
+            IconLine(
+                parent,
+                previousX, previousY,
+                x, y,
+                color, 13
+            )
+        end
+
+        previousX = x
+        previousY = y
+    end
+
+    -- Eight evenly spaced gear teeth.
+    for i = 0, teeth - 1 do
+        local angle = i * math.pi * 2 / teeth
+
+        local dx = math.cos(angle)
+        local dy = math.sin(angle)
+
+        local x1 = cx + dx * 36
+        local y1 = cy + dy * 36
+
+        local x2 = cx + dx * 47
+        local y2 = cy + dy * 47
+
+        IconLine(
+            parent,
+            x1, y1,
+            x2, y2,
+            color, 18
+        )
+    end
+
+    -- Central hole.
+    IconCircle(
+        parent,
+        47, 47,
+        26, color, 8
+    )
+end
+
+local IconDrawers = {
+    commands = DrawCommands,
+    voice = DrawVoice,
+    players = DrawPlayers,
+    actions = DrawActions,
+    servers = DrawServers,
+    settings = DrawSettings
+}
+
+local function DrawIcon(parent, kind, color)
+    local holder = Create("Frame", {
+        Name = kind .. "Icon",
         AnchorPoint = Vector2.new(0.5, 0.5),
         Position = UDim2.fromScale(0.5, 0.5),
         Size = UDim2.fromOffset(30, 30),
         BackgroundTransparency = 1,
-        Text = fallback[kind] or "?",
-        TextColor3 = color or C.muted,
-        Font = Enum.Font.GothamBold,
-        TextSize = kind == "voice" and 10 or 17,
-        TextXAlignment = Enum.TextXAlignment.Center
+        BorderSizePixel = 0
     }, parent)
+
+    local canvas = Create("Frame", {
+        Name = "HighResolutionCanvas",
+        Size = UDim2.fromOffset(
+            ICON_DRAW_SIZE,
+            ICON_DRAW_SIZE
+        ),
+        BackgroundTransparency = 1,
+        BorderSizePixel = 0
+    }, holder)
+
+    Create("UIScale", {
+        Scale = ICON_SCALE
+    }, canvas)
+
+    local drawer = IconDrawers[kind]
+
+    if drawer then
+        drawer(canvas, color or C.muted)
+    end
+
+    return holder
 end
 
 local function DrawSearchIcon(parent)
@@ -436,7 +586,10 @@ local function WriteJSON(filename, data)
     end
 
     return pcall(function()
-        writefile(filename, HttpService:JSONEncode(data))
+        writefile(
+            filename,
+            HttpService:JSONEncode(data)
+        )
     end)
 end
 
@@ -580,6 +733,7 @@ local function QueueNextTeleport()
     end)
 
     AutoExecute.teleportSupported = ok
+
     return ok
 end
 
@@ -592,7 +746,8 @@ local function ConfigureAutoExecute(enabled)
         local teleport = QueueNextTeleport()
 
         if startup and teleport then
-            AutoExecute.status = "Startup and teleport enabled"
+            AutoExecute.status =
+                "Startup and teleport enabled"
         elseif startup then
             AutoExecute.status = "Startup enabled"
         elseif teleport then
@@ -664,7 +819,10 @@ local function StartFly()
     StopFly()
 
     local r, h = Root(), Hum()
-    if not r or not h then return end
+
+    if not r or not h then
+        return
+    end
 
     h.PlatformStand = true
 
@@ -708,7 +866,10 @@ local function StartAirWalk()
     StopAirWalk()
 
     local r = Root()
-    if not r then return end
+
+    if not r then
+        return
+    end
 
     AirHeight = r.Position.Y - 3.2
 
@@ -722,7 +883,9 @@ local function Dash()
     local r = Root()
     local camera = workspace.CurrentCamera
 
-    if not r or not camera then return end
+    if not r or not camera then
+        return
+    end
 
     local direction = camera.CFrame.LookVector
     direction = Vector3.new(
@@ -731,7 +894,9 @@ local function Dash()
         direction.Z
     )
 
-    if direction.Magnitude < 0.01 then return end
+    if direction.Magnitude < 0.01 then
+        return
+    end
 
     local velocity = r.AssemblyLinearVelocity
 
@@ -770,8 +935,13 @@ local function RestoreTransparency()
 end
 
 local function DestroyInvisible()
-    if VisualAvatar then VisualAvatar:Destroy() end
-    if InvisibleFloor then InvisibleFloor:Destroy() end
+    if VisualAvatar then
+        VisualAvatar:Destroy()
+    end
+
+    if InvisibleFloor then
+        InvisibleFloor:Destroy()
+    end
 
     VisualAvatar = nil
     InvisibleFloor = nil
@@ -792,7 +962,9 @@ local function PartPath(obj, ancestor)
 
                 index += 1
 
-                if sibling == current then break end
+                if sibling == current then
+                    break
+                end
             end
         end
 
@@ -811,7 +983,10 @@ end
 
 local function MakeVisual()
     local c = Char()
-    if not c then return nil end
+
+    if not c then
+        return nil
+    end
 
     local archivable = c.Archivable
     c.Archivable = true
@@ -822,7 +997,9 @@ local function MakeVisual()
 
     c.Archivable = archivable
 
-    if not ok or not clone then return nil end
+    if not ok or not clone then
+        return nil
+    end
 
     clone.Name = "KHASTIFY_TransparentAvatar"
 
@@ -891,6 +1068,7 @@ local function MakeVisual()
     end
 
     clone.Parent = workspace
+
     return clone
 end
 
@@ -900,10 +1078,21 @@ local function GroundAt(x, z, referenceY)
 
     local excluded = {}
 
-    if Char() then table.insert(excluded, Char()) end
-    if VisualAvatar then table.insert(excluded, VisualAvatar) end
-    if InvisibleFloor then table.insert(excluded, InvisibleFloor) end
-    if AirPlatform then table.insert(excluded, AirPlatform) end
+    if Char() then
+        table.insert(excluded, Char())
+    end
+
+    if VisualAvatar then
+        table.insert(excluded, VisualAvatar)
+    end
+
+    if InvisibleFloor then
+        table.insert(excluded, InvisibleFloor)
+    end
+
+    if AirPlatform then
+        table.insert(excluded, AirPlatform)
+    end
 
     params.FilterDescendantsInstances = excluded
 
@@ -922,7 +1111,10 @@ end
 
 local function SetBodyY(y)
     local c, r = Char(), Root()
-    if not c or not r then return end
+
+    if not c or not r then
+        return
+    end
 
     local delta = y - r.Position.Y
 
@@ -969,7 +1161,9 @@ local function MirrorAvatar()
 
     for _, pair in ipairs(PartPairs) do
         if pair.source.Parent and pair.visual.Parent then
-            pair.visual.CFrame = pair.source.CFrame + offset
+            pair.visual.CFrame =
+                pair.source.CFrame + offset
+
             pair.visual.Size = pair.source.Size
         end
     end
@@ -982,7 +1176,8 @@ local function SetInvisible(enabled)
     if not enabled then
         if InvisibleActive and c then
             c:PivotTo(
-                c:GetPivot() + Vector3.new(0, OFFSET, 0)
+                c:GetPivot()
+                + Vector3.new(0, OFFSET, 0)
             )
 
             if r then
@@ -1002,6 +1197,7 @@ local function SetInvisible(enabled)
         end
 
         LastGroundY = nil
+
         return
     end
 
@@ -1033,14 +1229,16 @@ local function SetInvisible(enabled)
 
     for _, part in ipairs(c:GetDescendants()) do
         if part:IsA("BasePart") then
-            Transparency[part] = part.LocalTransparencyModifier
+            Transparency[part] =
+                part.LocalTransparencyModifier
         end
     end
 
     Noclip()
 
     c:PivotTo(
-        c:GetPivot() + Vector3.new(0, -OFFSET, 0)
+        c:GetPivot()
+        + Vector3.new(0, -OFFSET, 0)
     )
 
     r.AssemblyLinearVelocity = Vector3.zero
@@ -1065,15 +1263,21 @@ local function SetInvisible(enabled)
         camera.CameraSubject = h
 
         h.CameraOffset =
-            OriginalCameraOffset + Vector3.new(0, OFFSET, 0)
+            OriginalCameraOffset
+            + Vector3.new(0, OFFSET, 0)
     end
 end
 
 local function UpdateInvisible()
-    if not InvisibleActive then return end
+    if not InvisibleActive then
+        return
+    end
 
     local r = Root()
-    if not r then return end
+
+    if not r then
+        return
+    end
 
     Noclip()
 
@@ -1148,7 +1352,9 @@ local function SetHeadless(enabled)
     local c = Char()
     local head = c and c:FindFirstChild("Head")
 
-    if not head then return end
+    if not head then
+        return
+    end
 
     if enabled then
         if HeadTransparency[head] == nil then
@@ -1187,7 +1393,10 @@ end
 
 local function Freeze(enabled)
     local r = Root()
-    if not r then return end
+
+    if not r then
+        return
+    end
 
     r.Anchored = enabled
 
@@ -1199,12 +1408,18 @@ end
 
 local function Sit()
     local h = Hum()
-    if h then h.Sit = true end
+
+    if h then
+        h.Sit = true
+    end
 end
 
 local function Unstuck()
     local r = Root()
-    if not r then return end
+
+    if not r then
+        return
+    end
 
     State.freeze = false
     r.Anchored = false
@@ -1214,12 +1429,18 @@ end
 
 local function Respawn()
     local h = Hum()
-    if h then h.Health = 0 end
+
+    if h then
+        h.Health = 0
+    end
 end
 
 local function SelfFling()
     local r = Root()
-    if not r then return end
+
+    if not r then
+        return
+    end
 
     r.AssemblyLinearVelocity = Vector3.new(
         math.random(-120, 120),
@@ -1227,7 +1448,8 @@ local function SelfFling()
         math.random(-120, 120)
     )
 
-    r.AssemblyAngularVelocity = Vector3.new(15, 20, 15)
+    r.AssemblyAngularVelocity =
+        Vector3.new(15, 20, 15)
 end
 
 local function Wave()
@@ -1315,13 +1537,20 @@ Create("Frame", {
     BorderSizePixel = 0
 }, Sidebar)
 
-local Brand = Label(Sidebar, "KHASTIFY", 16, C.text, true)
+local Brand = Label(
+    Sidebar,
+    "KHASTIFY",
+    16,
+    C.text,
+    true
+)
+
 Brand.Position = UDim2.fromOffset(24, 31)
 Brand.Size = UDim2.fromOffset(135, 25)
 
 local Version = Label(
     Sidebar,
-    "universal hub v37",
+    "universal hub v38",
     11,
     C.muted
 )
@@ -1493,7 +1722,12 @@ for i, entry in ipairs(Navigation) do
         BackgroundTransparency = 1
     }, button)
 
-    local textLabel = Label(button, name, 16, C.muted)
+    local textLabel = Label(
+        button,
+        name,
+        16,
+        C.muted
+    )
 
     textLabel.Position = UDim2.fromOffset(52, -1)
     textLabel.Size = UDim2.new(1, -60, 1, 0)
@@ -1553,7 +1787,11 @@ local function UpdateHeadingIcon(name)
     local data = NavButtons[name]
 
     if data then
-        DrawIcon(HeadingIcon, data.kind, C.purple)
+        DrawIcon(
+            HeadingIcon,
+            data.kind,
+            C.purple
+        )
     end
 end
 
@@ -1721,7 +1959,14 @@ local function Feature(
         AutoButtonColor = false
     }, card)
 
-    local title = Label(card, name, 14, C.text, true)
+    local title = Label(
+        card,
+        name,
+        14,
+        C.text,
+        true
+    )
+
     title.Position = UDim2.fromOffset(15, 8)
     title.Size = UDim2.new(1, -112, 0, 24)
 
@@ -1736,7 +1981,13 @@ local function Feature(
     sub.Position = UDim2.fromOffset(15, 33)
     sub.Size = UDim2.new(1, -112, 0, 18)
 
-    local arrow = Label(card, "›", 24, C.muted)
+    local arrow = Label(
+        card,
+        "›",
+        24,
+        C.muted
+    )
+
     arrow.Position = UDim2.new(1, -29, 0, 12)
     arrow.Size = UDim2.fromOffset(19, 34)
     arrow.TextXAlignment = Enum.TextXAlignment.Center
@@ -1750,7 +2001,9 @@ local function Feature(
     end)
 
     Bind(click.MouseButton1Click, function()
-        if callback then callback(sub) end
+        if callback then
+            callback(sub)
+        end
     end)
 
     if keybind then
@@ -1793,7 +2046,9 @@ local function Toggle(name, key, category, callback)
     local function Execute()
         State[key] = not State[key]
 
-        if callback then callback(State[key]) end
+        if callback then
+            callback(State[key])
+        end
 
         if status and status.Parent then
             status.Text =
@@ -1814,7 +2069,12 @@ local function Toggle(name, key, category, callback)
     status = card:FindFirstChild("StatusLabel")
 end
 
-local function Action(name, category, description, callback)
+local function Action(
+    name,
+    category,
+    description,
+    callback
+)
     Commands[name] = callback
 
     Feature(
@@ -1835,7 +2095,14 @@ local function Number(
 )
     local card = MakeCard(71)
 
-    local title = Label(card, name, 14, C.text, true)
+    local title = Label(
+        card,
+        name,
+        14,
+        C.text,
+        true
+    )
+
     title.Position = UDim2.fromOffset(15, 7)
     title.Size = UDim2.new(1, -110, 0, 25)
 
@@ -1887,9 +2154,15 @@ local function Number(
         State[key] = value
         input.Text = tostring(value)
 
-        fill.Size = UDim2.fromScale(value / maximum, 1)
+        fill.Size = UDim2.fromScale(
+            value / maximum,
+            1
+        )
 
-        if callback then callback(value) end
+        if callback then
+            callback(value)
+        end
+
         Save()
     end
 
@@ -1950,7 +2223,11 @@ Sections.Commands = function()
     SectionTitle("Movement")
 
     Toggle("Fly", "fly", "Movement", function(on)
-        if on then StartFly() else StopFly() end
+        if on then
+            StartFly()
+        else
+            StopFly()
+        end
     end)
 
     Number("Fly Speed", "flySpeed", "Movement", 500)
@@ -1967,7 +2244,11 @@ Sections.Commands = function()
     Toggle("Click TP", "clickTP", "Movement")
 
     Toggle("Air Walk", "airWalk", "Movement", function(on)
-        if on then StartAirWalk() else StopAirWalk() end
+        if on then
+            StartAirWalk()
+        else
+            StopAirWalk()
+        end
     end)
 
     Number(
@@ -1977,7 +2258,10 @@ Sections.Commands = function()
         500,
         function(v)
             local h = Hum()
-            if h then h.WalkSpeed = v end
+
+            if h then
+                h.WalkSpeed = v
+            end
         end
     )
 
@@ -1998,7 +2282,12 @@ Sections.Commands = function()
 
     Number("Dash Power", "dashPower", "Movement", 500)
 
-    Action("Dash", "Movement", "Dash forward", Dash)
+    Action(
+        "Dash",
+        "Movement",
+        "Dash forward",
+        Dash
+    )
 
     SectionTitle("Character")
 
@@ -2114,7 +2403,13 @@ local function MakePlayerCard(player, order)
     username.Position = UDim2.fromOffset(63, 34)
     username.Size = UDim2.new(1, -115, 0, 19)
 
-    local arrow = Label(card, "›", 24, C.muted)
+    local arrow = Label(
+        card,
+        "›",
+        24,
+        C.muted
+    )
+
     arrow.Position = UDim2.new(1, -32, 0, 15)
     arrow.Size = UDim2.fromOffset(20, 32)
     arrow.TextXAlignment = Enum.TextXAlignment.Center
@@ -2144,7 +2439,11 @@ local function MakePlayerCard(player, order)
         }, actions)
 
         Corner(button, 7)
-        Bind(button.MouseButton1Click, callback)
+
+        Bind(
+            button.MouseButton1Click,
+            callback
+        )
 
         return button
     end
@@ -2171,10 +2470,15 @@ local function MakePlayerCard(player, order)
 
     local fling = Button("Fling", 0.52, function()
         local r = Root()
-        if not r then return end
+
+        if not r then
+            return
+        end
 
         local old = r.AssemblyAngularVelocity
-        r.AssemblyAngularVelocity = Vector3.new(0, 30, 0)
+
+        r.AssemblyAngularVelocity =
+            Vector3.new(0, 30, 0)
 
         task.delay(0.45, function()
             if r.Parent then
@@ -2184,14 +2488,22 @@ local function MakePlayerCard(player, order)
     end)
 
     local function Expand(open)
-        local color = open and C.selected or C.card
-        local buttonColor = open and C.card or C.selected
+        local color =
+            open and C.selected or C.card
+
+        local buttonColor =
+            open and C.card or C.selected
 
         tp.BackgroundColor3 = buttonColor
         fling.BackgroundColor3 = buttonColor
 
         Tween(card, {
-            Size = UDim2.new(1, 0, 0, open and 121 or 63),
+            Size = UDim2.new(
+                1,
+                0,
+                0,
+                open and 121 or 63
+            ),
             BackgroundColor3 = color
         })
 
@@ -2264,14 +2576,17 @@ local function RefreshPlayers()
     end
 end
 
-Bind(Players.PlayerAdded, RefreshPlayers)
+Bind(
+    Players.PlayerAdded,
+    RefreshPlayers
+)
 
 Bind(Players.PlayerRemoving, function()
     task.defer(RefreshPlayers)
 end)
 
 --==================================================
--- SERVER BROWSER
+-- V38 SERVER BROWSER / RATE-LIMIT HANDLING
 --==================================================
 
 local ServerBrowser = {
@@ -2282,18 +2597,43 @@ local ServerBrowser = {
     loading = false,
     status = nil,
     loadMore = nil,
-    expanded = nil
+    expanded = nil,
+    lastRefresh = 0,
+    cooldownUntil = 0
 }
 
-local function RequestServers(url)
-    local requestFunction =
+local SERVER_REFRESH_COOLDOWN = 15
+local SERVER_MAX_RETRIES = 4
+local SERVER_INITIAL_BACKOFF = 3
+local SERVER_MAX_BACKOFF = 45
+
+local function GetRequestFunction()
+    return
         (type(request) == "function" and request)
         or (type(http_request) == "function" and http_request)
         or (syn and syn.request)
         or (http and http.request)
+end
+
+local function HeaderValue(headers, wanted)
+    if type(headers) ~= "table" then
+        return nil
+    end
+
+    for key, value in pairs(headers) do
+        if tostring(key):lower() == wanted:lower() then
+            return value
+        end
+    end
+
+    return nil
+end
+
+local function RequestServers(url)
+    local requestFunction = GetRequestFunction()
 
     if type(requestFunction) ~= "function" then
-        return nil, "HTTP requests unsupported"
+        return nil, "HTTP requests unsupported", nil, false
     end
 
     local ok, response = pcall(function()
@@ -2307,17 +2647,34 @@ local function RequestServers(url)
     end)
 
     if not ok then
-        return nil, tostring(response)
+        return nil, tostring(response), nil, false
     end
 
     if type(response) ~= "table" then
-        return nil, "Invalid response"
+        return nil, "Invalid response", nil, false
     end
 
-    local status = response.StatusCode or response.Status
+    local status = tonumber(
+        response.StatusCode or response.Status
+    )
 
-    if status and tonumber(status) ~= 200 then
-        return nil, "HTTP " .. tostring(status)
+    if status == 429 then
+        local retryAfter = HeaderValue(
+            response.Headers or response.headers,
+            "Retry-After"
+        )
+
+        local seconds = tonumber(retryAfter)
+
+        if seconds then
+            seconds = math.clamp(seconds, 1, 120)
+        end
+
+        return nil, "HTTP 429", seconds, true
+    end
+
+    if status and status ~= 200 then
+        return nil, "HTTP " .. tostring(status), nil, false
     end
 
     local decodedOk, decoded = pcall(function()
@@ -2330,10 +2687,10 @@ local function RequestServers(url)
         or type(decoded) ~= "table"
         or type(decoded.data) ~= "table" then
 
-        return nil, "Invalid server data"
+        return nil, "Invalid server data", nil, false
     end
 
-    return decoded
+    return decoded, nil, nil, false
 end
 
 local function ServerURL(cursor)
@@ -2383,17 +2740,23 @@ local function ClearServerCards()
     ServerBrowser.cursor = nil
     ServerBrowser.status = nil
     ServerBrowser.loadMore = nil
+    ServerBrowser.expanded = nil
 end
 
 local function ServerCard(server, index, current)
     local id = server.id
     local placeId = server.placeId or game.PlaceId
 
-    if type(id) ~= "string" or id == "" then return end
+    if type(id) ~= "string" or id == "" then
+        return
+    end
 
-    local key = tostring(placeId) .. ":" .. id
+    local key =
+        tostring(placeId) .. ":" .. id
 
-    if ServerBrowser.cards[key] then return end
+    if ServerBrowser.cards[key] then
+        return
+    end
 
     local card = MakeCard(
         67,
@@ -2439,12 +2802,23 @@ local function ServerCard(server, index, current)
         .. tostring(server.maxPlayers or Players.MaxPlayers)
         .. " Players"
 
-    local population = Label(card, subtitle, 12, C.muted)
+    local population = Label(
+        card,
+        subtitle,
+        12,
+        C.muted
+    )
 
     population.Position = UDim2.fromOffset(37, 34)
     population.Size = UDim2.new(1, -85, 0, 19)
 
-    local arrow = Label(card, "›", 24, C.muted)
+    local arrow = Label(
+        card,
+        "›",
+        24,
+        C.muted
+    )
+
     arrow.Position = UDim2.new(1, -32, 0, 16)
     arrow.Size = UDim2.fromOffset(20, 32)
     arrow.TextXAlignment = Enum.TextXAlignment.Center
@@ -2462,7 +2836,11 @@ local function ServerCard(server, index, current)
     }, card)
 
     local shortId = #id > 16
-        and (id:sub(1, 8) .. "..." .. id:sub(-5))
+        and (
+            id:sub(1, 8)
+            .. "..."
+            .. id:sub(-5)
+        )
         or id
 
     local idLabel = Label(
@@ -2566,45 +2944,128 @@ local function ServerCard(server, index, current)
     Filter()
 end
 
+local function SetServerStatus(text)
+    if ServerBrowser.status
+        and ServerBrowser.status.Parent then
+
+        ServerBrowser.status.Text = text
+    end
+end
+
+local function WaitForRetry(seconds, generation)
+    local remaining = math.ceil(seconds)
+
+    while remaining > 0 do
+        if not Alive
+            or Active ~= "Servers"
+            or generation ~= ServerBrowser.generation then
+
+            return false
+        end
+
+        SetServerStatus(
+            "Rate limited - retrying in "
+            .. tostring(remaining) .. "s..."
+        )
+
+        task.wait(1)
+        remaining -= 1
+    end
+
+    return Alive
+        and Active == "Servers"
+        and generation == ServerBrowser.generation
+end
+
+local function FetchServerPageWithRetry(url, generation)
+    for attempt = 1, SERVER_MAX_RETRIES + 1 do
+        if not Alive
+            or Active ~= "Servers"
+            or generation ~= ServerBrowser.generation then
+
+            return nil, "Cancelled"
+        end
+
+        local data, err, retryAfter, rateLimited =
+            RequestServers(url)
+
+        if data then
+            return data
+        end
+
+        if not rateLimited then
+            return nil, err
+        end
+
+        local delaySeconds = retryAfter or math.min(
+            SERVER_INITIAL_BACKOFF * (2 ^ (attempt - 1)),
+            SERVER_MAX_BACKOFF
+        )
+
+        ServerBrowser.cooldownUntil = math.max(
+            ServerBrowser.cooldownUntil,
+            os.clock() + delaySeconds
+        )
+
+        if attempt > SERVER_MAX_RETRIES then
+            return nil, "Rate limited - try again later"
+        end
+
+        local continued = WaitForRetry(
+            delaySeconds,
+            generation
+        )
+
+        if not continued then
+            return nil, "Cancelled"
+        end
+    end
+
+    return nil, "Server request failed"
+end
+
 local LoadServerPage
 
 LoadServerPage = function(reset)
-    if ServerBrowser.loading then return end
-    if Active ~= "Servers" then return end
-
-    if reset then
-        ServerBrowser.generation += 1
-
-        local currentCards = {}
-
-        for key, data in pairs(ServerBrowser.cards) do
-            if data.current then
-                currentCards[key] = data
-            else
-                RemoveEntry(data.frame)
-
-                if data.frame.Parent then
-                    data.frame:Destroy()
-                end
-            end
-        end
-
-        ServerBrowser.cards = currentCards
-        ServerBrowser.servers = {}
-        ServerBrowser.cursor = nil
+    if ServerBrowser.loading then
+        return
     end
 
+    if Active ~= "Servers" then
+        return
+    end
+
+    local now = os.clock()
+
+    if now < ServerBrowser.cooldownUntil then
+        local remaining = math.ceil(
+            ServerBrowser.cooldownUntil - now
+        )
+
+        SetServerStatus(
+            "Please wait " .. remaining
+            .. "s before requesting servers"
+        )
+
+        return
+    end
+
+    -- Do not discard existing results until the new page succeeds.
     local generation = ServerBrowser.generation
-    local cursor = ServerBrowser.cursor
+    local cursor = reset and nil or ServerBrowser.cursor
 
     ServerBrowser.loading = true
 
-    if ServerBrowser.status then
-        ServerBrowser.status.Text = "Loading public servers..."
-    end
+    SetServerStatus(
+        reset and "Refreshing public servers..."
+        or "Loading more public servers..."
+    )
 
     task.spawn(function()
-        local data, err = RequestServers(ServerURL(cursor))
+        local data, err = FetchServerPageWithRetry(
+            ServerURL(cursor),
+            generation
+        )
 
         if not Alive
             or Active ~= "Servers"
@@ -2616,12 +3077,35 @@ LoadServerPage = function(reset)
         ServerBrowser.loading = false
 
         if not data then
-            if ServerBrowser.status then
-                ServerBrowser.status.Text =
-                    "Unable to load servers: " .. tostring(err)
+            if err ~= "Cancelled" then
+                SetServerStatus(
+                    tostring(#ServerBrowser.servers)
+                    .. " servers loaded - "
+                    .. tostring(err)
+                )
             end
 
             return
+        end
+
+        if reset then
+            local currentCards = {}
+
+            for key, entry in pairs(ServerBrowser.cards) do
+                if entry.current then
+                    currentCards[key] = entry
+                else
+                    RemoveEntry(entry.frame)
+
+                    if entry.frame.Parent then
+                        entry.frame:Destroy()
+                    end
+                end
+            end
+
+            ServerBrowser.cards = currentCards
+            ServerBrowser.servers = {}
+            ServerBrowser.expanded = nil
         end
 
         ServerBrowser.cursor = data.nextPageCursor
@@ -2631,7 +3115,9 @@ LoadServerPage = function(reset)
                 and server.id ~= game.JobId then
 
                 local key =
-                    tostring(game.PlaceId) .. ":" .. server.id
+                    tostring(game.PlaceId)
+                    .. ":"
+                    .. server.id
 
                 if not ServerBrowser.cards[key] then
                     table.insert(
@@ -2648,11 +3134,10 @@ LoadServerPage = function(reset)
             end
         end
 
-        if ServerBrowser.status then
-            ServerBrowser.status.Text =
-                tostring(#ServerBrowser.servers)
-                .. " other public servers loaded"
-        end
+        SetServerStatus(
+            tostring(#ServerBrowser.servers)
+            .. " other public servers loaded"
+        )
 
         if ServerBrowser.loadMore then
             ServerBrowser.loadMore.Visible =
@@ -2670,9 +3155,11 @@ end
 
 Sections.Servers = function()
     CurrentCategory = "All"
+
     AddCategory("All")
 
-    SearchBox.PlaceholderText = "search servers..."
+    SearchBox.PlaceholderText =
+        "search servers..."
 
     if game.JobId ~= "" then
         ServerCard({
@@ -2685,7 +3172,7 @@ Sections.Servers = function()
 
     local info = Label(
         List,
-        "Loading public servers...",
+        "Preparing server browser...",
         12,
         C.muted
     )
@@ -2707,10 +3194,29 @@ Sections.Servers = function()
     }, refreshCard)
 
     Bind(refresh.MouseButton1Click, function()
-        if not ServerBrowser.loading then
-            ServerBrowser.expanded = nil
-            LoadServerPage(true)
+        if ServerBrowser.loading then
+            return
         end
+
+        local now = os.clock()
+
+        local remaining = math.max(
+            ServerBrowser.lastRefresh
+                + SERVER_REFRESH_COOLDOWN - now,
+            ServerBrowser.cooldownUntil - now
+        )
+
+        if remaining > 0 then
+            SetServerStatus(
+                "Refresh available in "
+                .. math.ceil(remaining) .. "s"
+            )
+
+            return
+        end
+
+        ServerBrowser.lastRefresh = now
+        LoadServerPage(true)
     end)
 
     local moreCard = MakeCard(51, 999999)
@@ -2806,7 +3312,9 @@ Sections.Settings = function()
         Position = UDim2.new(1, -73, 0.5, -15),
         Size = UDim2.fromOffset(58, 30),
         BackgroundColor3 =
-            State.autoExecute and C.purple or C.border,
+            State.autoExecute
+            and C.purple
+            or C.border,
         Text = "",
         AutoButtonColor = false
     }, autoCard)
@@ -2826,7 +3334,9 @@ Sections.Settings = function()
 
     Bind(toggle.MouseButton1Click, function()
         local enabled = not State.autoExecute
-        local status = ConfigureAutoExecute(enabled)
+
+        local status =
+            ConfigureAutoExecute(enabled)
 
         autoStatus.Text = status
 
@@ -2852,7 +3362,8 @@ Sections.Settings = function()
         function()
             ChangingMenuKey = true
             SearchBox.Text = ""
-            SearchBox.PlaceholderText = "Press a new key..."
+            SearchBox.PlaceholderText =
+                "Press a new key..."
         end,
         false
     )
@@ -2889,13 +3400,13 @@ Sections.Settings = function()
         false
     )
 
-    SectionTitle("Icon Diagnostics", 20)
+    SectionTitle("Icon System", 20)
 
-    local card = MakeCard(78)
+    local card = MakeCard(74)
 
     local title = Label(
         card,
-        "Embedded Icon System",
+        "High-Resolution GUI Icons",
         14,
         C.text,
         true
@@ -2906,27 +3417,27 @@ Sections.Settings = function()
 
     local status = Label(
         card,
-        IconStatus,
+        "Six icons drawn directly in Roblox",
         12,
-        IconAsset and C.green or C.muted
+        C.green
     )
 
     status.Position = UDim2.fromOffset(14, 35)
-    status.Size = UDim2.new(1, -28, 0, 22)
+    status.Size = UDim2.new(1, -28, 0, 20)
 
     local description = Label(
         card,
-        "6 icons · embedded PNG · no external downloads",
+        "120x120 geometry · 30x30 display · no assets",
         11,
         C.faint
     )
 
-    description.Position = UDim2.fromOffset(14, 56)
+    description.Position = UDim2.fromOffset(14, 55)
     description.Size = UDim2.new(1, -28, 0, 17)
 
     AddEntry(
         card,
-        "embedded icon system diagnostics",
+        "high resolution icon system",
         "All"
     )
 end
@@ -2962,10 +3473,16 @@ ShowSection = function(name)
     ClearList()
 
     if Sections[name] then
-        local ok, err = pcall(Sections[name])
+        local ok, err = pcall(
+            Sections[name]
+        )
 
         if not ok then
-            warn("[KHASTIFY] Page error:", name, err)
+            warn(
+                "[KHASTIFY] Page error:",
+                name,
+                err
+            )
         end
     end
 
@@ -3015,7 +3532,8 @@ Bind(UIS.InputChanged, function(input)
         and input.UserInputType ==
         Enum.UserInputType.MouseMovement then
 
-        local delta = input.Position - DragStart
+        local delta =
+            input.Position - DragStart
 
         Window.Position = UDim2.new(
             StartPosition.X.Scale,
@@ -3041,7 +3559,8 @@ Bind(UIS.InputEnded, function(input)
             if size.X > 0 and size.Y > 0 then
                 State.uiX = math.clamp(
                     (
-                        Window.AbsolutePosition.X + WIDTH / 2
+                        Window.AbsolutePosition.X
+                        + WIDTH / 2
                     ) / size.X,
                     0,
                     1
@@ -3049,7 +3568,8 @@ Bind(UIS.InputEnded, function(input)
 
                 State.uiY = math.clamp(
                     (
-                        Window.AbsolutePosition.Y + HEIGHT / 2
+                        Window.AbsolutePosition.Y
+                        + HEIGHT / 2
                     ) / size.Y,
                     0,
                     1
@@ -3080,9 +3600,11 @@ Bind(UIS.InputBegan, function(input, processed)
                 Keybinds[name] = nil
 
             elseif input.KeyCode ~= Enum.KeyCode.Escape
-                and input.KeyCode ~= Enum.KeyCode.Unknown then
+                and input.KeyCode ~=
+                    Enum.KeyCode.Unknown then
 
-                Keybinds[name] = input.KeyCode.Name
+                Keybinds[name] =
+                    input.KeyCode.Name
             end
 
             Save()
@@ -3103,9 +3625,12 @@ Bind(UIS.InputBegan, function(input, processed)
             ChangingMenuKey = false
 
             if input.KeyCode ~= Enum.KeyCode.Escape
-                and input.KeyCode ~= Enum.KeyCode.Unknown then
+                and input.KeyCode ~=
+                    Enum.KeyCode.Unknown then
 
-                State.menuKey = input.KeyCode.Name
+                State.menuKey =
+                    input.KeyCode.Name
+
                 Save()
             end
 
@@ -3125,7 +3650,9 @@ Bind(UIS.InputBegan, function(input, processed)
         local key = input.KeyCode.Name
 
         if key == State.menuKey then
-            Window.Visible = not Window.Visible
+            Window.Visible =
+                not Window.Visible
+
             return
         end
 
@@ -3143,7 +3670,8 @@ Bind(UIS.InputBegan, function(input, processed)
 
         for commandName, assignedKey in pairs(Keybinds) do
             if assignedKey == key then
-                local command = Commands[commandName]
+                local command =
+                    Commands[commandName]
 
                 if command then
                     pcall(command)
@@ -3158,7 +3686,8 @@ Bind(UIS.InputBegan, function(input, processed)
         and input.UserInputType ==
             Enum.UserInputType.MouseButton1 then
 
-        local position = UIS:GetMouseLocation()
+        local position =
+            UIS:GetMouseLocation()
 
         local x = Window.AbsolutePosition.X
         local y = Window.AbsolutePosition.Y
@@ -3173,15 +3702,19 @@ Bind(UIS.InputBegan, function(input, processed)
             and position.Y <= y + h
 
         if not overUI then
-            local camera = workspace.CurrentCamera
+            local camera =
+                workspace.CurrentCamera
 
             if camera then
-                local ray = camera:ViewportPointToRay(
-                    position.X,
-                    position.Y
-                )
+                local ray =
+                    camera:ViewportPointToRay(
+                        position.X,
+                        position.Y
+                    )
 
-                local params = RaycastParams.new()
+                local params =
+                    RaycastParams.new()
+
                 params.FilterType =
                     Enum.RaycastFilterType.Exclude
 
@@ -3192,15 +3725,24 @@ Bind(UIS.InputBegan, function(input, processed)
                 end
 
                 if VisualAvatar then
-                    table.insert(excluded, VisualAvatar)
+                    table.insert(
+                        excluded,
+                        VisualAvatar
+                    )
                 end
 
                 if InvisibleFloor then
-                    table.insert(excluded, InvisibleFloor)
+                    table.insert(
+                        excluded,
+                        InvisibleFloor
+                    )
                 end
 
                 if AirPlatform then
-                    table.insert(excluded, AirPlatform)
+                    table.insert(
+                        excluded,
+                        AirPlatform
+                    )
                 end
 
                 params.FilterDescendantsInstances =
@@ -3224,7 +3766,11 @@ Bind(UIS.InputBegan, function(input, processed)
                         c:PivotTo(
                             CFrame.new(
                                 hit.Position
-                                + Vector3.new(0, 3.5, 0)
+                                + Vector3.new(
+                                    0,
+                                    3.5,
+                                    0
+                                )
                             )
                         )
                     end
@@ -3265,7 +3811,9 @@ Bind(Run.Heartbeat, function()
 
     if Active == "Servers" then
         local key =
-            tostring(game.PlaceId) .. ":" .. game.JobId
+            tostring(game.PlaceId)
+            .. ":"
+            .. game.JobId
 
         local data = ServerBrowser.cards[key]
 
@@ -3291,9 +3839,16 @@ Bind(Run.RenderStepped, function()
         MirrorAvatar()
     end
 
-    if State.fly and FlyVelocity and FlyGyro then
-        local camera = workspace.CurrentCamera
-        if not camera then return end
+    if State.fly
+        and FlyVelocity
+        and FlyGyro then
+
+        local camera =
+            workspace.CurrentCamera
+
+        if not camera then
+            return
+        end
 
         local cf = camera.CFrame
         local direction = Vector3.zero
@@ -3318,7 +3873,10 @@ Bind(Run.RenderStepped, function()
             direction += Vector3.yAxis
         end
 
-        if UIS:IsKeyDown(Enum.KeyCode.LeftControl) then
+        if UIS:IsKeyDown(
+            Enum.KeyCode.LeftControl
+        ) then
+
             direction -= Vector3.yAxis
         end
 
@@ -3357,7 +3915,10 @@ Bind(LP.CharacterAdded, function(c)
     OriginalCameraType = nil
     OriginalCameraOffset = nil
 
-    local h = c:WaitForChild("Humanoid", 10)
+    local h = c:WaitForChild(
+        "Humanoid",
+        10
+    )
 
     if h then
         h.WalkSpeed = State.speed
@@ -3434,11 +3995,10 @@ _G.KHASTIFY_HUB_CLEANUP = function()
 end
 
 print("====================================")
-print("KHASTIFY'S UNIVERSAL HUB V37")
-print("EMBEDDED ICON SYSTEM")
-print("ICON STATUS: " .. IconStatus)
-print("NO ROBLOX DECAL IDS")
-print("NO EXTERNAL ICON DOWNLOADS")
+print("KHASTIFY'S UNIVERSAL HUB V38")
+print("HIGH-RESOLUTION GUI ICONS ENABLED")
+print("NO IMAGE ASSETS REQUIRED")
+print("SERVER RATE-LIMIT HANDLING ENABLED")
 print("AUTO EXECUTE PRESERVED")
 print("SERVERS > ALL PRESERVED")
 print("Press " .. State.menuKey .. " to open.")
