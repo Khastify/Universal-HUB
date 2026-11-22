@@ -1,26 +1,20 @@
 --[[
-    KHASTIFY'S UNIVERSAL HUB V23
+    KHASTIFY'S UNIVERSAL HUB V24
 
-    V23:
-    - Full copy-and-paste script
-    - Sidebar icons enlarged to 30x30
-    - Sidebar text enlarged to 16px
-    - All tab contents vertically centered
-    - FIXED Servers tab highlighting
-    - Consistent purple selection indicator
+    V24 CHANGES:
+    - Selected sidebar text turns purple
+    - Sidebar labels moved up exactly 2 pixels
 
     PRESERVED:
-    - Commands and character utilities
-    - 11-stud invisibility
-    - Automatic player list updates
-    - Expandable player cards
+    - V23 sidebar layout and 30x30 icons
     - Public server browser
     - Current server pinned first
-    - Server search, refresh and load more
-    - Customizable command hotkeys
-    - Delete/Backspace to unbind
+    - Automatic player list updates
+    - Animated dropdowns
+    - Custom hotkeys
+    - Delete / Backspace to unbind
     - Unbound hotkeys display "..."
-    - Saved settings
+    - 11-stud invisibility system
 ]]
 
 --==================================================
@@ -320,10 +314,6 @@ end
 --==================================================
 -- ICONS
 --==================================================
-
--- Optional custom uploaded icon assets.
--- These must be valid Roblox image asset IDs.
--- The ESV screenshot itself is not uploaded by this script.
 
 local CustomIcons = {
     voice = 0,
@@ -1130,7 +1120,7 @@ Brand.Position = UDim2.fromOffset(24, 31)
 Brand.Size = UDim2.fromOffset(135, 25)
 
 local Version = Label(
-    Sidebar, "universal hub v23", 11, C.muted
+    Sidebar, "universal hub v24", 11, C.muted
 )
 
 Version.Position = UDim2.fromOffset(24, 57)
@@ -1258,7 +1248,7 @@ Bind(
 )
 
 --==================================================
--- V23 SIDEBAR NAVIGATION
+-- V24 SIDEBAR NAVIGATION
 --==================================================
 
 local Navigation = {
@@ -1303,8 +1293,10 @@ for i, entry in ipairs(Navigation) do
         BackgroundTransparency = 1
     }, button)
 
+    -- V24: Text moved upward by exactly 2 pixels.
+
     local nameLabel = Create("TextLabel", {
-        Position = UDim2.fromOffset(52, 0),
+        Position = UDim2.fromOffset(52, -2),
         Size = UDim2.new(1, -60, 1, 0),
         BackgroundTransparency = 1,
         BorderSizePixel = 0,
@@ -1344,8 +1336,10 @@ local function UpdateNav()
         data.button.BackgroundColor3 =
             selected and C.selected or C.side
 
+        -- V24: Selected text matches the purple icon.
+
         data.label.TextColor3 =
-            selected and C.text or C.muted
+            selected and C.purple or C.muted
 
         data.label.Font =
             selected and Enum.Font.GothamBold
@@ -2767,7 +2761,7 @@ Sections.Settings = function()
 end
 
 --==================================================
--- V23 PAGE NAVIGATION / HIGHLIGHT FIX
+-- PAGE NAVIGATION
 --==================================================
 
 ShowSection = function(name)
@@ -2781,15 +2775,9 @@ ShowSection = function(name)
         ClearServerCards()
     end
 
-    -- Set the active tab before building the page.
-    -- This ensures Servers is highlighted immediately.
-
     Active = name
     CurrentCategory = "All"
     WaitingForBind = nil
-
-    -- Update the sidebar first, independently
-    -- of whether page content loads successfully.
 
     UpdateNav()
     UpdateHeadingIcon(name)
@@ -3266,12 +3254,11 @@ _G.KHASTIFY_HUB_CLEANUP = function()
 end
 
 print("====================================")
-print("KHASTIFY'S UNIVERSAL HUB V23")
+print("KHASTIFY'S UNIVERSAL HUB V24")
+print("SELECTED TAB TEXT NOW PURPLE")
+print("SIDEBAR TEXT MOVED UP 2 PIXELS")
 print("30x30 SIDEBAR ICONS")
-print("16PX CENTERED SIDEBAR TEXT")
-print("SERVERS TAB HIGHLIGHT FIX")
 print("PUBLIC SERVER BROWSER")
 print("AUTOMATIC PLAYER LIST UPDATES")
-print("DELETE TO UNBIND HOTKEYS")
 print("Press " .. State.menuKey .. " to open.")
 print("====================================")
