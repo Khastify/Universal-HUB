@@ -1,26 +1,26 @@
 --[[
-    KHASTIFY'S UNIVERSAL HUB V20
-    =====================================
+    KHASTIFY'S UNIVERSAL HUB V21
 
-    V20:
-    - Larger sidebar labels and icons
-    - Redesigned 26x26 sidebar icons
-    - Original Servers icon, proportionally scaled
-    - Automatic player join/leave updates
-    - Live player count
-    - Preserve player search and dropdown states
-    - No manual player refresh button
+    V21 CHANGES:
+    - All UI text increased by 2 pixels
+    - Redesigned Players, Actions and Settings icons
+    - Simplified Voice Chat icon: oval + underscore
+    - Commands and Servers icons preserved
+    - Unbound hotkeys display "..."
+    - Delete / Backspace removes a hotkey
+    - Escape cancels hotkey editing
 
     PRESERVED:
-    - V17 search magnifying glass
+    - Automatic player list updates
     - Animated player dropdown arrows
-    - V15 card spacing
-    - V19 keybind boxes
-    - Delete to unbind
-    - Existing movement/character commands
+    - Magnifying glass search icon
+    - Rounded card spacing
+    - Saved keybinds
+    - Movement and character commands
+    - 11-stud invisibility system
 
-    K = Open/close hub
-    Q = Dash (default)
+    K = Open / close hub
+    Q = Dash by default
 ]]
 
 --==================================================
@@ -45,6 +45,7 @@ local Parent = (gethui and gethui())
     or LP:WaitForChild("PlayerGui")
 
 local Old = Parent:FindFirstChild("KhastifyUniversalHub")
+
 if Old then
     Old:Destroy()
 end
@@ -115,6 +116,7 @@ if type(readfile) == "function" then
         for key, value in pairs(values) do
             if State[key] ~= nil
                 and type(value) == type(State[key]) then
+
                 State[key] = value
             end
         end
@@ -125,6 +127,7 @@ if type(readfile) == "function" then
             for name, key in pairs(saved.keybinds) do
                 if type(name) == "string"
                     and type(key) == "string" then
+
                     Keybinds[name] = key
                 end
             end
@@ -216,7 +219,7 @@ local function Label(parent, text, size, color, bold)
             and Enum.Font.GothamBold
             or Enum.Font.Gotham,
 
-        TextSize = size or 12,
+        TextSize = size or 14,
 
         TextXAlignment = Enum.TextXAlignment.Left,
         TextYAlignment = Enum.TextYAlignment.Center,
@@ -243,7 +246,7 @@ local function Tween(obj, properties, duration)
 end
 
 --==================================================
--- V20 SCALABLE ICON ENGINE
+-- ICON DRAWING
 --==================================================
 
 local function Line(parent, x1, y1, x2, y2, color, thick)
@@ -269,7 +272,9 @@ local function Line(parent, x1, y1, x2, y2, color, thick)
         BorderSizePixel = 0
     }, parent)
 
-    Corner(obj, thick)
+    Create("UICorner", {
+        CornerRadius = UDim.new(1, 0)
+    }, obj)
 
     return obj
 end
@@ -337,23 +342,35 @@ local function OutlineRect(parent, x, y, w, h, color, radius, thick)
     return obj
 end
 
-local function Arc(parent, cx, cy, radius, startAngle, endAngle, color, thick)
+local function Arc(
+    parent,
+    cx,
+    cy,
+    radius,
+    startAngle,
+    endAngle,
+    color,
+    thick
+)
     local segments = math.max(
-        5,
-        math.ceil(math.abs(endAngle - startAngle) / 12)
+        8,
+        math.ceil(math.abs(endAngle - startAngle) / 8)
     )
 
     for i = 0, segments - 1 do
         local a1 = math.rad(
-            startAngle + (endAngle - startAngle) * i / segments
+            startAngle
+            + (endAngle - startAngle) * i / segments
         )
 
         local a2 = math.rad(
-            startAngle + (endAngle - startAngle) * (i + 1) / segments
+            startAngle
+            + (endAngle - startAngle) * (i + 1) / segments
         )
 
         Line(
             parent,
+
             cx + math.cos(a1) * radius,
             cy + math.sin(a1) * radius,
 
@@ -366,12 +383,12 @@ local function Arc(parent, cx, cy, radius, startAngle, endAngle, color, thick)
     end
 end
 
-local function DrawIcon(parent, kind, color, size)
-    color = color or C.muted
-    size = size or 26
+--==================================================
+-- V21 SIDEBAR ICONS
+--==================================================
 
-    -- Icons use a 26x26 coordinate system.
-    -- Scaling the entire container preserves proportions.
+local function DrawIcon(parent, kind, color)
+    color = color or C.muted
 
     local holder = Create("Frame", {
         Size = UDim2.fromOffset(26, 26),
@@ -379,81 +396,78 @@ local function DrawIcon(parent, kind, color, size)
         BorderSizePixel = 0
     }, parent)
 
-    if size ~= 26 then
-        Create("UIScale", {
-            Scale = size / 26
-        }, holder)
-    end
-
     if kind == "commands" then
 
-        -- Terminal prompt with frame
+        -- PRESERVED V20 COMMANDS ICON
+
         OutlineRect(
-            holder, 2.5, 3.5, 21, 19,
+            holder,
+            2.5, 3.5,
+            21, 19,
             color, 4, 1.7
         )
 
         Line(holder, 6.5, 9, 11, 13, color, 2)
         Line(holder, 11, 13, 6.5, 17, color, 2)
-
         Line(holder, 13.5, 17, 19.5, 17, color, 2)
 
     elseif kind == "voice" then
 
-        -- Microphone capsule
+        -- V21: SIMPLE OVAL + UNDERSCORE
+        -- No cradle, side arms or vertical stand.
+
         OutlineRect(
-            holder, 9.5, 2.5, 7, 13,
-            color, 4, 1.9
-        )
-
-        -- Curved microphone cradle
-        Arc(
             holder,
-            13, 12.5,
-            9,
-            0, 180,
-            color, 1.9
+            9, 3,
+            8, 15,
+            color, 5, 2
         )
 
-        -- Stand
-        Line(holder, 13, 21.5, 13, 24, color, 1.9)
-        Line(holder, 8.5, 24, 17.5, 24, color, 1.9)
+        Line(
+            holder,
+            8, 23,
+            18, 23,
+            color, 2.2
+        )
 
     elseif kind == "players" then
 
-        -- Main person
-        Circle(holder, 9, 8, 3.5, color, 1.8)
+        -- V21: TWO CLEAN PERSON SILHOUETTES
+        -- Heads are circular, bodies are separate.
 
+        Circle(holder, 9, 8, 3.3, color, 1.9)
+        Circle(holder, 19, 9, 2.8, color, 1.9)
+
+        -- Front person's shoulders.
         Arc(
             holder,
             9, 20,
-            8,
-            190, 350,
+            7.5,
+            195, 345,
             color, 2
         )
 
-        -- Second person
-        Circle(holder, 19, 9, 3, color, 1.8)
-
+        -- Back person's shoulders.
         Arc(
             holder,
-            19, 20,
-            6,
-            265, 350,
-            color, 1.9
+            19, 19,
+            5.5,
+            270, 350,
+            color, 2
         )
 
     elseif kind == "actions" then
 
-        -- Wand shaft
+        -- V21: CLEAN WAND WITH TWO SPARKLES
+
         Line(
             holder,
             4, 22,
             19, 7,
-            color, 2.5
+            color, 2.6
         )
 
-        -- Wand cap
+        -- Wand cap.
         Line(
             holder,
             16.5, 5,
@@ -461,20 +475,17 @@ local function DrawIcon(parent, kind, color, size)
             color, 1.8
         )
 
-        -- Main sparkle
-        Line(holder, 20, 1, 20, 5, color, 1.8)
-        Line(holder, 18, 3, 22, 3, color, 1.8)
+        -- Large sparkle.
+        Line(holder, 19, 1, 19, 5, color, 1.8)
+        Line(holder, 17, 3, 21, 3, color, 1.8)
 
-        -- Small sparkle
-        Line(holder, 6, 3, 6, 9, color, 1.7)
-        Line(holder, 3, 6, 9, 6, color, 1.7)
-
-        Dot(holder, 22, 18, 1.3, color)
+        -- Small sparkle.
+        Line(holder, 5, 4, 5, 9, color, 1.7)
+        Line(holder, 2.5, 6.5, 7.5, 6.5, color, 1.7)
 
     elseif kind == "servers" then
 
-        -- Same design as V18/V19,
-        -- scaled proportionally from 20 to 26.
+        -- PRESERVED V20 SERVERS ICON
 
         local scale = 26 / 20
 
@@ -519,44 +530,68 @@ local function DrawIcon(parent, kind, color, size)
 
     elseif kind == "settings" then
 
-        -- Larger gear with twelve defined teeth.
-        Circle(holder, 13, 13, 8.5, color, 2)
-        Circle(holder, 13, 13, 3.5, color, 2)
+        -- V21: SOLID-TOOTH GEAR
+        -- Built from rectangular teeth around a ring.
 
-        for i = 0, 11 do
-            local angle = math.rad(i * 30)
+        local gear = Create("Frame", {
+            Position = UDim2.fromOffset(2, 2),
+            Size = UDim2.fromOffset(22, 22),
 
-            local x1 = 13 + math.cos(angle) * 9
-            local y1 = 13 + math.sin(angle) * 9
+            BackgroundTransparency = 1,
+            BorderSizePixel = 0
+        }, holder)
 
-            local x2 = 13 + math.cos(angle) * 11.5
-            local y2 = 13 + math.sin(angle) * 11.5
+        for i = 0, 7 do
+            local angle = i * 45
+            local radians = math.rad(angle)
 
-            Line(
-                holder,
-                x1, y1,
-                x2, y2,
-                color, 3
-            )
+            local tooth = Create("Frame", {
+                AnchorPoint = Vector2.new(0.5, 0.5),
+
+                Position = UDim2.fromOffset(
+                    11 + math.cos(radians) * 9,
+                    11 + math.sin(radians) * 9
+                ),
+
+                Size = UDim2.fromOffset(5, 5),
+
+                Rotation = angle,
+
+                BackgroundColor3 = color,
+                BorderSizePixel = 0
+            }, gear)
+
+            Corner(tooth, 1)
         end
+
+        Circle(gear, 11, 11, 8.2, color, 3)
+        Circle(gear, 11, 11, 3.2, color, 2)
     end
 
     return holder
 end
 
 --==================================================
--- SEARCH ICON - PRESERVED
+-- MAGNIFYING GLASS - PRESERVED
 --==================================================
 
 local function DrawSearchIcon(parent)
     local holder = Create("Frame", {
         Position = UDim2.fromOffset(15, 14),
         Size = UDim2.fromOffset(20, 20),
+
         BackgroundTransparency = 1
     }, parent)
 
     Circle(holder, 7, 7, 6, C.muted, 1.8)
-    Line(holder, 12, 12, 18, 18, C.muted, 2)
+
+    Line(
+        holder,
+        12, 12,
+        18, 18,
+        C.muted,
+        2
+    )
 
     return holder
 end
@@ -1344,23 +1379,23 @@ Create("Frame", {
 local Brand = Label(
     Sidebar,
     "KHASTIFY",
-    14,
+    16,
     C.text,
     true
 )
 
-Brand.Position = UDim2.fromOffset(24, 32)
-Brand.Size = UDim2.fromOffset(135, 24)
+Brand.Position = UDim2.fromOffset(24, 31)
+Brand.Size = UDim2.fromOffset(135, 25)
 
 local Version = Label(
     Sidebar,
-    "universal hub v20",
-    9,
+    "universal hub v21",
+    11,
     C.muted
 )
 
-Version.Position = UDim2.fromOffset(24, 55)
-Version.Size = UDim2.fromOffset(135, 18)
+Version.Position = UDim2.fromOffset(24, 57)
+Version.Size = UDim2.fromOffset(135, 19)
 
 --==================================================
 -- MAIN PANEL
@@ -1388,7 +1423,7 @@ local HeadingIcon = Create("Frame", {
 local Heading = Label(
     Topbar,
     "commands",
-    16,
+    18,
     C.text,
     true
 )
@@ -1406,7 +1441,7 @@ local Close = Create("TextButton", {
     TextColor3 = C.muted,
 
     Font = Enum.Font.GothamMedium,
-    TextSize = 22
+    TextSize = 24
 }, Topbar)
 
 local Minimize = Create("TextButton", {
@@ -1419,7 +1454,7 @@ local Minimize = Create("TextButton", {
     TextColor3 = C.muted,
 
     Font = Enum.Font.GothamMedium,
-    TextSize = 18
+    TextSize = 20
 }, Topbar)
 
 --==================================================
@@ -1452,7 +1487,7 @@ local SearchBox = Create("TextBox", {
     TextColor3 = C.text,
 
     Font = Enum.Font.Gotham,
-    TextSize = 12,
+    TextSize = 14,
 
     TextXAlignment = Enum.TextXAlignment.Left,
     ClearTextOnFocus = false
@@ -1499,8 +1534,6 @@ local List = Create("ScrollingFrame", {
 
     ClipsDescendants = true
 }, Main)
-
--- V15 padding preserved.
 
 Create("UIPadding", {
     PaddingLeft = UDim.new(0, 8),
@@ -1572,12 +1605,12 @@ for i, entry in ipairs(Navigation) do
     local nameLabel = Label(
         button,
         name,
-        13,
+        15,
         C.muted
     )
 
     nameLabel.Position = UDim2.fromOffset(50, 0)
-    nameLabel.Size = UDim2.new(1, -59, 1, 0)
+    nameLabel.Size = UDim2.new(1, -57, 1, 0)
 
     local indicator = Create("Frame", {
         Position = UDim2.new(1, -5, 0.5, -13),
@@ -1623,8 +1656,7 @@ local function UpdateNav()
         DrawIcon(
             data.icon,
             data.kind,
-            selected and C.purple or C.muted,
-            26
+            selected and C.purple or C.muted
         )
     end
 end
@@ -1640,8 +1672,7 @@ local function UpdateHeadingIcon(name)
         DrawIcon(
             HeadingIcon,
             data.kind,
-            C.purple,
-            26
+            C.purple
         )
     end
 end
@@ -1679,7 +1710,8 @@ local function UpdateKeybindLabels()
                 button.Text = "..."
                 button.TextColor3 = C.purple
             else
-                button.Text = Keybinds[name] or "NONE"
+                -- V21: Three dots instead of NONE.
+                button.Text = Keybinds[name] or "..."
 
                 button.TextColor3 =
                     Keybinds[name] and C.text or C.faint
@@ -1743,7 +1775,6 @@ local function AddEntry(obj, name, category)
     }
 
     table.insert(Entries, entry)
-
     return entry
 end
 
@@ -1777,8 +1808,8 @@ end
 local function AddCategory(name)
     local button = Create("TextButton", {
         Size = UDim2.fromOffset(
-            math.max(55, #name * 7 + 22),
-            27
+            math.max(61, #name * 8 + 24),
+            29
         ),
 
         BackgroundColor3 =
@@ -1794,7 +1825,7 @@ local function AddCategory(name)
             and C.text or C.muted,
 
         Font = Enum.Font.GothamMedium,
-        TextSize = 10
+        TextSize = 12
     }, Categories)
 
     Corner(button, 7)
@@ -1822,12 +1853,12 @@ local function SectionTitle(value)
     local title = Label(
         List,
         value:upper(),
-        10,
+        12,
         C.muted,
         true
     )
 
-    title.Size = UDim2.new(1, 0, 0, 25)
+    title.Size = UDim2.new(1, 0, 0, 27)
 
     return title
 end
@@ -1859,7 +1890,7 @@ local function Feature(
     callback,
     allowKeybind
 )
-    local card = MakeCard(56)
+    local card = MakeCard(60)
 
     local clickArea = Create("TextButton", {
         Size = UDim2.fromScale(1, 1),
@@ -1873,33 +1904,33 @@ local function Feature(
     local title = Label(
         card,
         name,
-        12,
+        14,
         C.text,
         true
     )
 
     title.Position = UDim2.fromOffset(15, 8)
-    title.Size = UDim2.new(1, -110, 0, 21)
+    title.Size = UDim2.new(1, -112, 0, 24)
 
     local sub = Label(
         card,
         description or category,
-        10,
+        12,
         C.faint
     )
 
     sub.Name = "StatusLabel"
-    sub.Position = UDim2.fromOffset(15, 29)
-    sub.Size = UDim2.new(1, -110, 0, 17)
+    sub.Position = UDim2.fromOffset(15, 33)
+    sub.Size = UDim2.new(1, -112, 0, 18)
 
     local arrow = Label(
         card,
         "›",
-        22,
+        24,
         C.muted
     )
 
-    arrow.Position = UDim2.new(1, -29, 0, 10)
+    arrow.Position = UDim2.new(1, -29, 0, 12)
     arrow.Size = UDim2.fromOffset(19, 34)
     arrow.TextXAlignment = Enum.TextXAlignment.Center
 
@@ -1921,19 +1952,19 @@ local function Feature(
         local bindButton = Create("TextButton", {
             Name = "KeybindButton",
 
-            Position = UDim2.new(1, -99, 0.5, -15),
-            Size = UDim2.fromOffset(66, 30),
+            Position = UDim2.new(1, -102, 0.5, -16),
+            Size = UDim2.fromOffset(69, 32),
 
             BackgroundColor3 = C.bg,
             BorderSizePixel = 0,
 
-            Text = Keybinds[name] or "NONE",
+            Text = Keybinds[name] or "...",
 
             TextColor3 =
                 Keybinds[name] and C.text or C.faint,
 
             Font = Enum.Font.GothamMedium,
-            TextSize = 10,
+            TextSize = 12,
 
             AutoButtonColor = false,
             ZIndex = 5
@@ -2001,22 +2032,22 @@ local function Action(name, category, description, callback)
 end
 
 local function Number(name, key, category, maximum, callback)
-    local card = MakeCard(67)
+    local card = MakeCard(71)
 
     local title = Label(
         card,
         name,
-        12,
+        14,
         C.text,
         true
     )
 
     title.Position = UDim2.fromOffset(15, 7)
-    title.Size = UDim2.new(1, -110, 0, 23)
+    title.Size = UDim2.new(1, -110, 0, 25)
 
     local input = Create("TextBox", {
         Position = UDim2.new(1, -91, 0, 9),
-        Size = UDim2.fromOffset(75, 25),
+        Size = UDim2.fromOffset(75, 27),
 
         BackgroundColor3 = C.bg,
 
@@ -2024,7 +2055,7 @@ local function Number(name, key, category, maximum, callback)
         TextColor3 = C.text,
 
         Font = Enum.Font.GothamMedium,
-        TextSize = 11,
+        TextSize = 13,
 
         ClearTextOnFocus = false
     }, card)
@@ -2032,7 +2063,7 @@ local function Number(name, key, category, maximum, callback)
     Corner(input, 6)
 
     local track = Create("Frame", {
-        Position = UDim2.fromOffset(15, 48),
+        Position = UDim2.fromOffset(15, 52),
         Size = UDim2.new(1, -30, 0, 4),
 
         BackgroundColor3 = C.border,
@@ -2206,7 +2237,7 @@ Sections.Commands = function()
 end
 
 --==================================================
--- V20 AUTOMATIC PLAYER LIST
+-- AUTOMATIC PLAYER LIST
 --==================================================
 
 local ExpandedUserId = nil
@@ -2249,7 +2280,7 @@ local function MakeDropdownArrow(parent)
     local holder = Create("Frame", {
         AnchorPoint = Vector2.new(0.5, 0.5),
 
-        Position = UDim2.new(1, -20, 0, 29),
+        Position = UDim2.new(1, -20, 0, 30),
         Size = UDim2.fromOffset(20, 20),
 
         BackgroundTransparency = 1,
@@ -2259,7 +2290,7 @@ local function MakeDropdownArrow(parent)
     local symbol = Label(
         holder,
         "›",
-        22,
+        24,
         C.muted
     )
 
@@ -2351,13 +2382,13 @@ local function MakePlayerCard(player, generation)
         return
     end
 
-    local card = MakeCard(59)
+    local card = MakeCard(63)
 
     card.Name = "Player_" .. player.UserId
     card.ClipsDescendants = true
 
     local avatar = Create("ImageLabel", {
-        Position = UDim2.fromOffset(12, 10),
+        Position = UDim2.fromOffset(12, 12),
         Size = UDim2.fromOffset(39, 39),
 
         BackgroundColor3 = C.selected,
@@ -2376,28 +2407,28 @@ local function MakePlayerCard(player, generation)
     local displayName = Label(
         card,
         player.DisplayName,
-        12,
+        14,
         C.text,
         true
     )
 
     displayName.Position = UDim2.fromOffset(63, 10)
-    displayName.Size = UDim2.new(1, -115, 0, 21)
+    displayName.Size = UDim2.new(1, -115, 0, 24)
 
     local username = Label(
         card,
         "@" .. player.Name,
-        10,
+        12,
         C.muted
     )
 
-    username.Position = UDim2.fromOffset(63, 31)
-    username.Size = UDim2.new(1, -115, 0, 16)
+    username.Position = UDim2.fromOffset(63, 34)
+    username.Size = UDim2.new(1, -115, 0, 19)
 
     local arrow = MakeDropdownArrow(card)
 
     local clickArea = Create("TextButton", {
-        Size = UDim2.new(1, 0, 0, 59),
+        Size = UDim2.new(1, 0, 0, 63),
 
         BackgroundTransparency = 1,
 
@@ -2406,7 +2437,7 @@ local function MakePlayerCard(player, generation)
     }, card)
 
     Create("Frame", {
-        Position = UDim2.fromOffset(12, 59),
+        Position = UDim2.fromOffset(12, 63),
         Size = UDim2.new(1, -24, 0, 1),
 
         BackgroundColor3 = C.border,
@@ -2414,8 +2445,8 @@ local function MakePlayerCard(player, generation)
     }, card)
 
     local actions = Create("Frame", {
-        Position = UDim2.fromOffset(12, 70),
-        Size = UDim2.new(1, -24, 0, 33),
+        Position = UDim2.fromOffset(12, 74),
+        Size = UDim2.new(1, -24, 0, 36),
 
         BackgroundTransparency = 1
     }, card)
@@ -2430,7 +2461,7 @@ local function MakePlayerCard(player, generation)
         TextColor3 = C.text,
 
         Font = Enum.Font.GothamBold,
-        TextSize = 11
+        TextSize = 13
     }, actions)
 
     Corner(tp, 7)
@@ -2446,13 +2477,13 @@ local function MakePlayerCard(player, generation)
         TextColor3 = C.text,
 
         Font = Enum.Font.GothamBold,
-        TextSize = 11
+        TextSize = 13
     }, actions)
 
     Corner(fling, 7)
 
     local function SetExpanded(open, instant)
-        local height = open and 114 or 59
+        local height = open and 121 or 63
         local rotation = open and 90 or 0
         local color = open and C.hover or C.card
 
@@ -2539,12 +2570,9 @@ end
 local function RemovePlayerCard(player)
     local data = PlayerCards[player.UserId]
 
-    if not data then
-        return
-    end
+    if not data then return end
 
     DisconnectPlayerCard(player.UserId)
-
     RemoveEntry(data.frame)
 
     if data.frame and data.frame.Parent then
@@ -2611,11 +2639,11 @@ Sections.Players = function()
     local info = Label(
         List,
         "",
-        10,
+        12,
         C.muted
     )
 
-    info.Size = UDim2.new(1, 0, 0, 24)
+    info.Size = UDim2.new(1, 0, 0, 27)
     info.LayoutOrder = 0
 
     PlayerCountLabel = info
@@ -2630,7 +2658,7 @@ Sections.Players = function()
 end
 
 --==================================================
--- V20 LIVE PLAYER EVENTS
+-- LIVE PLAYER EVENTS
 --==================================================
 
 Bind(Players.PlayerAdded, function(player)
@@ -2653,8 +2681,6 @@ Bind(Players.PlayerRemoving, function(player)
     if Active == "Players" then
         RemovePlayerCard(player)
 
-        -- PlayerRemoving fires before the player is
-        -- fully removed from Players:GetPlayers().
         task.defer(function()
             if Alive and Active == "Players" then
                 UpdatePlayerOrder()
@@ -2923,7 +2949,7 @@ Bind(UIS.InputBegan, function(input, processed)
                 Save()
 
             elseif input.KeyCode == Enum.KeyCode.Escape then
-                -- Cancel.
+                -- Cancel editing.
 
             elseif input.KeyCode ~= Enum.KeyCode.Unknown then
                 SetKeybind(name, input.KeyCode.Name)
@@ -3253,9 +3279,10 @@ _G.KHASTIFY_HUB_CLEANUP = function()
 end
 
 print("====================================")
-print("KHASTIFY'S UNIVERSAL HUB V20")
-print("LARGER SIDEBAR + ICON REDESIGN")
+print("KHASTIFY'S UNIVERSAL HUB V21")
+print("ALL UI TEXT +2 PIXELS")
+print("REDESIGNED SIDEBAR ICONS")
+print("UNBOUND HOTKEYS DISPLAY ...")
 print("AUTOMATIC PLAYER LIST UPDATES")
-print("DELETE TO UNBIND HOTKEYS")
 print("Press " .. State.menuKey .. " to open.")
 print("====================================")
