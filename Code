@@ -1,22 +1,20 @@
 --[[
-    KHASTIFY'S UNIVERSAL HUB V50
+    KHASTIFY'S UNIVERSAL HUB V51
 
-    NEW:
-    - Stop Spy button in Players page header
-    - Visible only while Spy is active
-    - Purple button with white text
-    - Restores character and camera when clicked
-    - Automatically disappears when Spy ends
+    V51:
+    - Stop Spy permanently visible in Players header
+    - Profile Spy buttons always say "Spy"
+    - Profile Spy buttons never move or change color
+    - Clicking Spy starts or switches targets
+    - Header Stop Spy is the manual stop control
 
     PRESERVED:
-    - V49 Spy system
-    - Player TP / Fling / Spy
-    - Original Commands icon
-    - Original Players icon
-    - Original Servers icon
+    - V50 Spy behavior
+    - TP / Fling
+    - Commands / Players / Servers icons
     - Centered Settings text
     - Four sidebar tabs
-    - Existing commands
+    - All existing Commands
     - Auto Execute
     - Server browser / HTTP 429 handling
 
@@ -46,10 +44,7 @@ local Parent = (gethui and gethui())
     or LP:WaitForChild("PlayerGui")
 
 local Old = Parent:FindFirstChild("KhastifyUniversalHub")
-
-if Old then
-    Old:Destroy()
-end
+if Old then Old:Destroy() end
 
 local Alive = true
 local Connections = {}
@@ -201,9 +196,7 @@ local function IconLine(parent, x1, y1, x2, y2, color, thickness)
     local dy = y2 - y1
     local length = math.sqrt(dx * dx + dy * dy)
 
-    if length < 0.001 then
-        return
-    end
+    if length < 0.001 then return end
 
     local line = Create("Frame", {
         AnchorPoint = Vector2.new(0.5, 0.5),
@@ -218,7 +211,6 @@ local function IconLine(parent, x1, y1, x2, y2, color, thickness)
     }, parent)
 
     Corner(line, thickness / 2)
-
     return line
 end
 
@@ -356,7 +348,7 @@ local function DrawSearchIcon(parent)
 end
 
 --==================================================
--- STATE
+-- STATE / SAVED SETTINGS
 --==================================================
 
 local State = {
@@ -494,6 +486,7 @@ end
 local function InstallStartupLoader()
     if type(writefile) ~= "function"
         or type(isfolder) ~= "function" then
+
         return false
     end
 
@@ -621,13 +614,8 @@ local FlyVelocity
 local FlyGyro
 
 local function StopFly()
-    if FlyVelocity then
-        FlyVelocity:Destroy()
-    end
-
-    if FlyGyro then
-        FlyGyro:Destroy()
-    end
+    if FlyVelocity then FlyVelocity:Destroy() end
+    if FlyGyro then FlyGyro:Destroy() end
 
     FlyVelocity = nil
     FlyGyro = nil
@@ -706,9 +694,7 @@ local function Dash()
     local direction = camera.CFrame.LookVector
 
     direction = Vector3.new(
-        direction.X,
-        0,
-        direction.Z
+        direction.X, 0, direction.Z
     )
 
     if direction.Magnitude < 0.01 then return end
@@ -750,13 +736,8 @@ local function RestoreTransparency()
 end
 
 local function DestroyInvisible()
-    if VisualAvatar then
-        VisualAvatar:Destroy()
-    end
-
-    if InvisibleFloor then
-        InvisibleFloor:Destroy()
-    end
+    if VisualAvatar then VisualAvatar:Destroy() end
+    if InvisibleFloor then InvisibleFloor:Destroy() end
 
     VisualAvatar = nil
     InvisibleFloor = nil
@@ -777,9 +758,7 @@ local function PartPath(obj, ancestor)
 
                 index += 1
 
-                if sibling == current then
-                    break
-                end
+                if sibling == current then break end
             end
         end
 
@@ -809,9 +788,7 @@ local function MakeVisual()
 
     c.Archivable = archivable
 
-    if not ok or not clone then
-        return nil
-    end
+    if not ok or not clone then return nil end
 
     clone.Name = "KHASTIFY_TransparentAvatar"
 
@@ -837,15 +814,13 @@ local function MakeVisual()
                 obj.Transparency = 1
             else
                 obj.Transparency = math.max(
-                    obj.Transparency,
-                    0.3
+                    obj.Transparency, 0.3
                 )
             end
 
         elseif obj:IsA("Decal") or obj:IsA("Texture") then
             obj.Transparency = math.max(
-                obj.Transparency,
-                0.3
+                obj.Transparency, 0.3
             )
 
         elseif obj:IsA("ParticleEmitter")
@@ -889,21 +864,10 @@ local function GroundAt(x, z, referenceY)
 
     local excluded = {}
 
-    if Char() then
-        table.insert(excluded, Char())
-    end
-
-    if VisualAvatar then
-        table.insert(excluded, VisualAvatar)
-    end
-
-    if InvisibleFloor then
-        table.insert(excluded, InvisibleFloor)
-    end
-
-    if AirPlatform then
-        table.insert(excluded, AirPlatform)
-    end
+    if Char() then table.insert(excluded, Char()) end
+    if VisualAvatar then table.insert(excluded, VisualAvatar) end
+    if InvisibleFloor then table.insert(excluded, InvisibleFloor) end
+    if AirPlatform then table.insert(excluded, AirPlatform) end
 
     params.FilterDescendantsInstances = excluded
 
@@ -922,10 +886,7 @@ end
 
 local function SetBodyY(y)
     local c, r = Char(), Root()
-
-    if not c or not r then
-        return
-    end
+    if not c or not r then return end
 
     local delta = y - r.Position.Y
 
@@ -1073,9 +1034,7 @@ local function SetInvisible(enabled)
 end
 
 local function UpdateInvisible()
-    if not InvisibleActive then
-        return
-    end
+    if not InvisibleActive then return end
 
     local r = Root()
     if not r then return end
@@ -1085,9 +1044,7 @@ local function UpdateInvisible()
     local p = r.Position
 
     local ground = GroundAt(
-        p.X,
-        p.Z,
-        p.Y + OFFSET
+        p.X, p.Z, p.Y + OFFSET
     )
 
     if ground then
@@ -1107,9 +1064,7 @@ local function UpdateInvisible()
 
     if InvisibleFloor then
         InvisibleFloor.Position = Vector3.new(
-            p.X,
-            floorY - 0.25,
-            p.Z
+            p.X, floorY - 0.25, p.Z
         )
     end
 
@@ -1123,9 +1078,7 @@ local function UpdateInvisible()
             local v = r.AssemblyLinearVelocity
 
             r.AssemblyLinearVelocity = Vector3.new(
-                v.X,
-                math.max(0, v.Y),
-                v.Z
+                v.X, math.max(0, v.Y), v.Z
             )
 
         elseif r.Position.Y > maximumY then
@@ -1134,9 +1087,7 @@ local function UpdateInvisible()
             local v = r.AssemblyLinearVelocity
 
             r.AssemblyLinearVelocity = Vector3.new(
-                v.X,
-                math.min(0, v.Y),
-                v.Z
+                v.X, math.min(0, v.Y), v.Z
             )
         end
     end
@@ -1214,9 +1165,7 @@ end
 
 local function Respawn()
     local h = Hum()
-    if h then
-        h.Health = 0
-    end
+    if h then h.Health = 0 end
 end
 
 local function SelfFling()
@@ -1274,7 +1223,6 @@ local Spy = {
     savedCameraMaxZoom = nil,
 
     targetCharacterConnection = nil,
-
     generation = 0
 }
 
@@ -1294,12 +1242,10 @@ local function GetTargetHumanoid(player)
     end
 
     local character = player.Character
+    if not character then return nil end
 
-    if not character then
-        return nil
-    end
-
-    local humanoid = character:FindFirstChildOfClass("Humanoid")
+    local humanoid =
+        character:FindFirstChildOfClass("Humanoid")
 
     if humanoid and humanoid.Health > 0 then
         return humanoid
@@ -1417,16 +1363,15 @@ local function StopSpy()
     Spy.savedCameraMaxZoom = nil
 
     UpdateSpyButtons()
-
-    -- V50: Hide the header Stop Spy button.
     UpdateHeaderSpyButton()
 end
 
 local function WatchSpyTarget(player)
     DisconnectSpyTarget()
 
-    Spy.targetCharacterConnection = player.CharacterAdded:Connect(
-        function(character)
+    Spy.targetCharacterConnection =
+        player.CharacterAdded:Connect(function(character)
+
             local generation = Spy.generation
 
             task.spawn(function()
@@ -1449,8 +1394,7 @@ local function WatchSpyTarget(player)
 
                 ApplySpyCamera(player)
             end)
-        end
-    )
+        end)
 end
 
 local function StartSpy(player)
@@ -1461,11 +1405,15 @@ local function StartSpy(player)
         return
     end
 
+    -- V51:
+    -- Clicking Spy on the same target does not stop Spy.
     if Spy.active and Spy.target == player then
-        StopSpy()
+        ApplySpyCamera(player)
         return
     end
 
+    -- V51:
+    -- Switching targets keeps the original hiding spot.
     if Spy.active then
         Spy.generation += 1
         Spy.target = player
@@ -1544,17 +1492,12 @@ local function StartSpy(player)
     ApplySpyCamera(player)
 
     UpdateSpyButtons()
-
-    -- V50: Show the header Stop Spy button.
     UpdateHeaderSpyButton()
 end
 
+-- V51: Profile Spy buttons only START or SWITCH.
 local function ToggleSpy(player)
-    if Spy.active and Spy.target == player then
-        StopSpy()
-    else
-        StartSpy(player)
-    end
+    StartSpy(player)
 end
 
 Bind(Players.PlayerRemoving, function(player)
@@ -1624,7 +1567,7 @@ Brand.Position = UDim2.fromOffset(24, 31)
 Brand.Size = UDim2.fromOffset(135, 25)
 
 local Version = Label(
-    Sidebar, "universal hub v50", 11, C.muted
+    Sidebar, "universal hub v51", 11, C.muted
 )
 
 Version.Position = UDim2.fromOffset(24, 57)
@@ -1675,18 +1618,17 @@ local Minimize = Create("TextButton", {
 }, Topbar)
 
 --==================================================
--- V50 HEADER STOP SPY BUTTON
+-- V51 HEADER STOP SPY
 --==================================================
+
+-- Declare Active before the visibility callback.
+local Active = "Commands"
 
 local HeaderStopSpy = Create("TextButton", {
     Name = "HeaderStopSpy",
 
     AnchorPoint = Vector2.new(1, 0.5),
-
-    -- Right edge is 80px from the topbar's right edge.
-    -- This leaves room for the minimize and close buttons.
     Position = UDim2.new(1, -80, 0, 28),
-
     Size = UDim2.fromOffset(88, 29),
 
     BackgroundColor3 = C.purple,
@@ -1700,6 +1642,8 @@ local HeaderStopSpy = Create("TextButton", {
 
     AutoButtonColor = false,
 
+    -- V51:
+    -- Visibility is controlled only by the current page.
     Visible = false,
     ZIndex = 5
 }, Topbar)
@@ -1721,19 +1665,16 @@ Bind(HeaderStopSpy.MouseLeave, function()
 end)
 
 Bind(HeaderStopSpy.MouseButton1Click, function()
+    -- Safe to click even when Spy isn't active.
     if Spy.active then
         StopSpy()
     end
 end)
 
+-- V51:
+-- Always visible on Players, regardless of Spy state.
 UpdateHeaderSpyButton = function()
-    HeaderStopSpy.Visible =
-        Spy.active
-        and Active == "Players"
-
-    if HeaderStopSpy.Visible then
-        HeaderStopSpy.BackgroundColor3 = C.purple
-    end
+    HeaderStopSpy.Visible = (Active == "Players")
 end
 
 --==================================================
@@ -1824,7 +1765,6 @@ local Navigation = {
 }
 
 local NavButtons = {}
-local Active = "Commands"
 
 for i, entry in ipairs(Navigation) do
     local name, kind = entry[1], entry[2]
@@ -2110,9 +2050,7 @@ local function Feature(
     end)
 
     Bind(click.MouseButton1Click, function()
-        if callback then
-            callback(sub)
-        end
+        if callback then callback(sub) end
     end)
 
     if keybind then
@@ -2155,9 +2093,7 @@ local function Toggle(name, key, category, callback)
     local function Execute()
         State[key] = not State[key]
 
-        if callback then
-            callback(State[key])
-        end
+        if callback then callback(State[key]) end
 
         if status and status.Parent then
             status.Text =
@@ -2250,10 +2186,7 @@ local function Number(
 
         fill.Size = UDim2.fromScale(value / maximum, 1)
 
-        if callback then
-            callback(value)
-        end
-
+        if callback then callback(value) end
         Save()
     end
 
@@ -2314,11 +2247,7 @@ Sections.Commands = function()
     SectionTitle("Movement")
 
     Toggle("Fly", "fly", "Movement", function(on)
-        if on then
-            StartFly()
-        else
-            StopFly()
-        end
+        if on then StartFly() else StopFly() end
     end)
 
     Number("Fly Speed", "flySpeed", "Movement", 500)
@@ -2335,11 +2264,7 @@ Sections.Commands = function()
     Toggle("Click TP", "clickTP", "Movement")
 
     Toggle("Air Walk", "airWalk", "Movement", function(on)
-        if on then
-            StartAirWalk()
-        else
-            StopAirWalk()
-        end
+        if on then StartAirWalk() else StopAirWalk() end
     end)
 
     Number(
@@ -2349,10 +2274,7 @@ Sections.Commands = function()
         500,
         function(v)
             local h = Hum()
-
-            if h then
-                h.WalkSpeed = v
-            end
+            if h then h.WalkSpeed = v end
         end
     )
 
@@ -2447,22 +2369,19 @@ local function ClearPlayerCards()
     table.clear(PlayerCards)
 end
 
+-- V51:
+-- Spy buttons always have their original appearance.
 UpdateSpyButtons = function()
-    for userId, data in pairs(PlayerCards) do
+    for _, data in pairs(PlayerCards) do
         local button = data.spyButton
 
         if button and button.Parent then
-            local active =
-                Spy.active
-                and Spy.target
-                and Spy.target.UserId == userId
-
-            button.Text = active and "Stop Spy" or "Spy"
-
-            button.BackgroundColor3 =
-                active and C.purple or C.selected
-
+            button.Text = "Spy"
             button.TextColor3 = C.text
+
+            -- Match the other player action buttons.
+            button.BackgroundColor3 =
+                data.expanded and C.card or C.selected
         end
     end
 end
@@ -2504,21 +2423,14 @@ local function MakePlayerCard(player, order)
     end)
 
     local display = Label(
-        card,
-        player.DisplayName,
-        14,
-        C.text,
-        true
+        card, player.DisplayName, 14, C.text, true
     )
 
     display.Position = UDim2.fromOffset(63, 10)
     display.Size = UDim2.new(1, -115, 0, 24)
 
     local username = Label(
-        card,
-        "@" .. player.Name,
-        12,
-        C.muted
+        card, "@" .. player.Name, 12, C.muted
     )
 
     username.Position = UDim2.fromOffset(63, 34)
@@ -2542,13 +2454,13 @@ local function MakePlayerCard(player, order)
         BackgroundTransparency = 1
     }, card)
 
+    -- V51:
+    -- Identical three-button layout from V50.
     local function Button(text, index, callback)
         local button = Create("TextButton", {
             Position = UDim2.new(
                 (index - 1) * 0.34,
-                0,
-                0,
-                0
+                0, 0, 0
             ),
             Size = UDim2.new(0.32, 0, 1, 0),
             BackgroundColor3 = C.selected,
@@ -2560,7 +2472,6 @@ local function MakePlayerCard(player, order)
         }, actions)
 
         Corner(button, 7)
-
         Bind(button.MouseButton1Click, callback)
 
         return button
@@ -2615,32 +2526,40 @@ local function MakePlayerCard(player, order)
     end)
 
     -- SPY
+    --
+    -- V51:
+    -- Always says Spy.
+    -- Never becomes Stop Spy.
+    -- Never changes size, position, or color.
+    -- Clicking again on the same player does not stop.
 
     local spyButton = Button("Spy", 3, function()
         ToggleSpy(player)
     end)
 
+    local data = {
+        frame = card,
+        spyButton = spyButton,
+        expanded = false
+    }
+
     local function Expand(open)
+        data.expanded = open
+
         local color = open and C.selected or C.card
         local buttonColor = open and C.card or C.selected
 
         tp.BackgroundColor3 = buttonColor
         fling.BackgroundColor3 = buttonColor
 
-        local spyingThisPlayer =
-            Spy.active and Spy.target == player
-
-        spyButton.BackgroundColor3 =
-            spyingThisPlayer and C.purple or buttonColor
-
-        spyButton.Text =
-            spyingThisPlayer and "Stop Spy" or "Spy"
+        -- Spy always matches TP and Fling.
+        spyButton.BackgroundColor3 = buttonColor
+        spyButton.Text = "Spy"
+        spyButton.TextColor3 = C.text
 
         Tween(card, {
             Size = UDim2.new(
-                1,
-                0,
-                0,
+                1, 0, 0,
                 open and 121 or 63
             ),
             BackgroundColor3 = color
@@ -2651,11 +2570,8 @@ local function MakePlayerCard(player, order)
         })
     end
 
-    PlayerCards[player.UserId] = {
-        frame = card,
-        expand = Expand,
-        spyButton = spyButton
-    }
+    data.expand = Expand
+    PlayerCards[player.UserId] = data
 
     Bind(click.MouseButton1Click, function()
         ExpandedPlayer =
@@ -2663,8 +2579,8 @@ local function MakePlayerCard(player, order)
             and nil
             or player.UserId
 
-        for id, data in pairs(PlayerCards) do
-            data.expand(id == ExpandedPlayer)
+        for id, entry in pairs(PlayerCards) do
+            entry.expand(id == ExpandedPlayer)
         end
     end)
 
@@ -2857,9 +2773,7 @@ local function JoinServer(placeId, jobId)
 
     return pcall(function()
         TeleportService:TeleportToPlaceInstance(
-            placeId,
-            jobId,
-            LP
+            placeId, jobId, LP
         )
     end)
 end
@@ -2887,15 +2801,10 @@ local function ServerCard(server, index, current)
     local id = server.id
     local placeId = server.placeId or game.PlaceId
 
-    if type(id) ~= "string" or id == "" then
-        return
-    end
+    if type(id) ~= "string" or id == "" then return end
 
     local key = tostring(placeId) .. ":" .. id
-
-    if ServerBrowser.cards[key] then
-        return
-    end
+    if ServerBrowser.cards[key] then return end
 
     local card = MakeCard(
         67,
@@ -3473,7 +3382,7 @@ Sections.Settings = function()
 
     local title = Label(
         card,
-        "V50 GUI Icons",
+        "V51 GUI Icons",
         14,
         C.text,
         true
@@ -3502,7 +3411,7 @@ Sections.Settings = function()
     description.Position = UDim2.fromOffset(14, 55)
     description.Size = UDim2.new(1, -28, 0, 17)
 
-    AddEntry(card, "v50 icon system", "All")
+    AddEntry(card, "v51 icon system", "All")
 end
 
 --==================================================
@@ -3539,7 +3448,8 @@ ShowSection = function(name)
         Heading.Position = UDim2.fromOffset(55, 15)
     end
 
-    -- V50: Only show header Stop Spy on Players.
+    -- V51:
+    -- Stop Spy is always visible on Players.
     UpdateHeaderSpyButton()
 
     ClearList()
@@ -4064,10 +3974,11 @@ _G.KHASTIFY_HUB_CLEANUP = function()
 end
 
 print("====================================")
-print("KHASTIFY'S UNIVERSAL HUB V50")
-print("NEW HEADER STOP SPY BUTTON")
-print("VISIBLE ONLY WHILE SPYING")
-print("V49 SPY SYSTEM PRESERVED")
+print("KHASTIFY'S UNIVERSAL HUB V51")
+print("HEADER STOP SPY ALWAYS ON PLAYERS")
+print("PROFILE SPY BUTTONS NEVER CHANGE")
+print("SPY STARTS OR SWITCHES TARGETS")
+print("HEADER STOP SPY RESTORES CHARACTER")
 print("ORIGINAL ICONS PRESERVED")
 print("AUTO EXECUTE PRESERVED")
 print("HTTP 429 HANDLING PRESERVED")
