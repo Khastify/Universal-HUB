@@ -1,4 +1,3 @@
-local H = {} -- Namespaced functions reduce top-level Luau registers
 --[[
     KHASTIFY'S UNIVERSAL HUB V54
 
@@ -336,7 +335,7 @@ local State = {
     uiY = 0.5
 }
 
-local Keybinds = {H.Dash = "Q"}
+local Keybinds = {Dash = "Q"}
 local Favorites = {}
 
 local SaveFile = "KHASTIFY_Universal_Hub_Settings.json"
