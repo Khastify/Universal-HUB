@@ -686,6 +686,7 @@ local OriginalCameraType
 local OriginalCameraOffset
 
 local LastGroundY
+local FloorY
 
 function H.RestoreTransparency()
     for part, value in pairs(Transparency) do
@@ -844,7 +845,7 @@ function H.SetBodyY(y)
     local c, r = H.Char(), H.Root()
     if not c or not r then return end
 
-    local delta = y - r.Position
+    local delta = y - r.Position.Y
 
     if math.abs(delta) > 0.001 then
         c:PivotTo(
@@ -891,16 +892,14 @@ function H.MirrorAvatar()
     end
 end
 
+-- Restored from KHASTIFY'S UNIVERSAL HUB V17.
 function H.SetInvisible(enabled)
     local c, r, h = H.Char(), H.Root(), H.Hum()
     local camera = workspace.CurrentCamera
 
     if not enabled then
         if InvisibleActive and c then
-            c:PivotTo(
-                c:GetPivot() + Vector3.new(0, OFFSET, 0)
-            )
-
+            c:PivotTo(c:GetPivot() + Vector3.new(0, OFFSET, 0))
             if r then
                 r.AssemblyLinearVelocity = Vector3.zero
                 r.AssemblyAngularVelocity = Vector3.zero
@@ -908,42 +907,36 @@ function H.SetInvisible(enabled)
         end
 
         InvisibleActive = false
-
         H.RestoreCamera()
         H.DestroyInvisible()
         H.RestoreTransparency()
 
-        if not State.noclip then H.RestoreCollision() end
+        if not State.noclip then
+            H.RestoreCollision()
+        end
 
+        FloorY = nil
         LastGroundY = nil
         return
     end
 
-    if InvisibleActive or not c or not r or not h then
-        return
-    end
+    if InvisibleActive or not c or not r or not h then return end
 
     local clone = H.MakeVisual()
-
     if not clone then
         State.invisible = false
         return
     end
-
     VisualAvatar = clone
 
     if camera then
         OriginalCameraSubject = camera.CameraSubject
         OriginalCameraType = camera.CameraType
     end
-
     OriginalCameraOffset = h.CameraOffset
 
-    LastGroundY = H.GroundAt(
-        r.Position.X,
-        r.Position.Z,
-        r.Position.Y
-    ) or (r.Position.Y - 3.2)
+    LastGroundY = H.GroundAt(r.Position.X, r.Position.Z, r.Position.Y)
+        or (r.Position.Y - 3.2)
 
     for _, part in ipairs(c:GetDescendants()) do
         if part:IsA("BasePart") then
@@ -952,11 +945,7 @@ function H.SetInvisible(enabled)
     end
 
     H.Noclip()
-
-    c:PivotTo(
-        c:GetPivot() + Vector3.new(0, -OFFSET, 0)
-    )
-
+    c:PivotTo(c:GetPivot() + Vector3.new(0, -OFFSET, 0))
     r.AssemblyLinearVelocity = Vector3.zero
     r.AssemblyAngularVelocity = Vector3.zero
 
@@ -966,75 +955,54 @@ function H.SetInvisible(enabled)
         end
     end
 
-    InvisibleFloor = H.Platform(
-        "KHASTIFY_InvisibleSupport",
-        Vector3.new(14, 0.5, 14)
-    )
-
+    FloorY = r.Position.Y - 3.2
+    InvisibleFloor = H.Platform("KHASTIFY_InvisibleSupport", Vector3.new(14, 0.5, 14))
     InvisibleActive = true
     H.MirrorAvatar()
 
     if camera then
         camera.CameraType = Enum.CameraType.Custom
         camera.CameraSubject = h
-
-        h.CameraOffset =
-            OriginalCameraOffset + Vector3.new(0, OFFSET, 0)
+        h.CameraOffset = OriginalCameraOffset + Vector3.new(0, OFFSET, 0)
     end
 end
 
 function H.UpdateInvisible()
     if not InvisibleActive then return end
-
     local r = H.Root()
     if not r then return end
 
     H.Noclip()
-
     local p = r.Position
     local ground = H.GroundAt(p.X, p.Z, p.Y + OFFSET)
 
     if ground then
         local difference = ground - LastGroundY
-
         if (difference >= 0 and difference <= 3.5)
             or (difference < 0 and difference >= -5) then
-
             H.SetBodyY(r.Position.Y + difference)
             LastGroundY = ground
         end
     end
 
     p = r.Position
-    local floorY = LastGroundY - OFFSET
-
+    FloorY = LastGroundY - OFFSET
     if InvisibleFloor then
-        InvisibleFloor.Position = Vector3.new(
-            p.X, floorY - 0.25, p.Z
-        )
+        InvisibleFloor.Position = Vector3.new(p.X, FloorY - 0.25, p.Z)
     end
 
     if not State.fly then
-        local minimumY = floorY + 3.2
+        local minimumY = FloorY + 3.2
         local maximumY = LastGroundY - 4.5
 
         if r.Position.Y < minimumY then
             H.SetBodyY(minimumY)
-
             local v = r.AssemblyLinearVelocity
-
-            r.AssemblyLinearVelocity = Vector3.new(
-                v.X, math.max(0, v.Y), v.Z
-            )
-
+            r.AssemblyLinearVelocity = Vector3.new(v.X, math.max(0, v.Y), v.Z)
         elseif r.Position.Y > maximumY then
             H.SetBodyY(maximumY)
-
             local v = r.AssemblyLinearVelocity
-
-            r.AssemblyLinearVelocity = Vector3.new(
-                v.X, math.min(0, v.Y), v.Z
-            )
+            r.AssemblyLinearVelocity = Vector3.new(v.X, math.min(0, v.Y), v.Z)
         end
     end
 end
@@ -3155,7 +3123,7 @@ function H.ESPFeature(name, key, setter)
     end
     Commands[name]=Execute
     H.Bind(toggle.MouseButton1Click,Execute)
-    local arrow = H.Create("TextButton", {Position=UDim2.new(1,-30,0,37),Size=UDim2.fromOffset(25,23),BackgroundTransparency=1,Text="⌄",TextColor3=C.purple,TextSize=19,Font=Enum.Font.GothamBold},card)
+    local arrow = H.Create("TextButton", {Position=UDim2.new(1,-30,0,18),Size=UDim2.fromOffset(25,28),BackgroundTransparency=1,Text="›",TextColor3=C.muted,TextSize=25,Font=Enum.Font.GothamMedium,Rotation=0,AutoButtonColor=false},card)
     local picker = H.Create("Frame", {Position=UDim2.fromOffset(13,69),Size=UDim2.new(1,-26,0,85),BackgroundTransparency=1},card)
     local caption=H.Label(picker,"ESP COLOR",11,C.muted,true)
     caption.Size=UDim2.new(1,0,0,18)
@@ -3185,9 +3153,14 @@ function H.ESPFeature(name, key, setter)
     local expanded=false
     local function SetExpanded(value)
         expanded=value
-        arrow.Text=value and "⌃" or "⌄"
-        picker.Visible=value
-        H.Tween(card,{Size=UDim2.new(1,0,0,value and 165 or 63)},0.18)
+        if value then picker.Visible = true end
+        H.Tween(arrow, {Rotation=value and 90 or 0, TextColor3=value and C.purple or C.muted}, 0.2)
+        H.Tween(card,{Size=UDim2.new(1,0,0,value and 165 or 63)},0.2)
+        if not value then
+            task.delay(0.2, function()
+                if not expanded and picker.Parent then picker.Visible=false end
+            end)
+        end
     end
     ESPCardClosers[key]=SetExpanded
     SetExpanded(false)
