@@ -1,6 +1,6 @@
 local H = {} -- Namespaced functions reduce top-level Luau registers
 --[[
-    KHASTIFY'S UNIVERSAL HUB V63
+    KHASTIFY'S UNIVERSAL HUB V64
 
     NEW:
     - Favorites category
@@ -2209,7 +2209,7 @@ Brand.Position = UDim2.fromOffset(24, 31)
 Brand.Size = UDim2.fromOffset(135, 25)
 
 local Version = H.Label(
-    Sidebar, "universal hub v63", 11, C.muted
+    Sidebar, "universal hub v64", 11, C.muted
 )
 
 Version.Position = UDim2.fromOffset(24, 57)
@@ -3490,7 +3490,7 @@ UpdateSpyButtons = function()
     end
 end
 
--- V63 floating player profile; requests are only made when a profile opens.
+-- V64 floating player profile; requests are only made when a profile opens.
 local ProfileWindow
 local ProfileGeneration = 0
 local ProfileHighlight
@@ -3553,7 +3553,7 @@ function H.OpenPlayerProfile(player)
         BorderSizePixel = 0, ScrollBarThickness = 3, ScrollBarImageColor3 = C.purple,
         CanvasSize = UDim2.fromOffset(0, 920)}, panel)
     local avatar = H.Create("ImageLabel", {Position = UDim2.fromOffset(16,14), Size = UDim2.fromOffset(72,72), BackgroundColor3 = C.selected, Image = ""}, body)
-    H.Corner(avatar, 8)
+    H.Create("UICorner", {CornerRadius = UDim.new(1, 0)}, avatar)
     local name = H.Label(body, player.DisplayName, 17, C.text, true)
     name.Position = UDim2.fromOffset(94, 16); name.Size = UDim2.new(1,-108,0,24)
     local user = H.Label(body, "@"..player.Name, 12, C.muted)
@@ -5377,7 +5377,7 @@ _G.KHASTIFY_HUB_CLEANUP = function()
 end
 
 print("====================================")
-print("KHASTIFY'S UNIVERSAL HUB V63")
+print("KHASTIFY'S UNIVERSAL HUB V64")
 print("FAVORITES SYSTEM ADDED")
 print("CHARMS ESP ADDED")
 print("SKELETON ESP ADDED")
