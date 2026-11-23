@@ -1,6 +1,6 @@
 local H = {} -- Namespaced functions reduce top-level Luau registers
 --[[
-    KHASTIFY'S UNIVERSAL HUB V59
+    KHASTIFY'S UNIVERSAL HUB V60
 
     NEW:
     - Favorites category
@@ -2209,7 +2209,7 @@ Brand.Position = UDim2.fromOffset(24, 31)
 Brand.Size = UDim2.fromOffset(135, 25)
 
 local Version = H.Label(
-    Sidebar, "universal hub v59", 11, C.muted
+    Sidebar, "universal hub v60", 11, C.muted
 )
 
 Version.Position = UDim2.fromOffset(24, 57)
@@ -3490,7 +3490,7 @@ UpdateSpyButtons = function()
     end
 end
 
--- V59 floating player profile; requests are only made when a profile opens.
+-- V60 floating player profile; requests are only made when a profile opens.
 local ProfileWindow
 local ProfileGeneration = 0
 local ProfileHighlight
@@ -3511,13 +3511,13 @@ function H.OpenPlayerProfile(player)
     if not player or not player.Parent then return end
     local generation = ProfileGeneration
     local panel = H.Create("Frame", {
-        Name = "KHASTIFY_PlayerProfile", Size = UDim2.fromOffset(350, 530),
+        Name = "KHASTIFY_PlayerProfile", Size = UDim2.fromOffset(365, 530),
         Position = UDim2.new(0.5, 310, 0.5, -265),
         BackgroundColor3 = C.bg, BorderSizePixel = 0,
         ClipsDescendants = true, Active = true
     }, GUI)
     ProfileWindow = panel
-    H.Corner(panel, 13); H.Stroke(panel, C.purple, 1)
+    H.Corner(panel, 11); H.Stroke(panel, C.border, 1)
     local header = H.Create("Frame", {Size = UDim2.new(1, 0, 0, 43), BackgroundColor3 = C.side, BorderSizePixel = 0, Active = true}, panel)
     local heading = H.Label(header, "PLAYER PROFILE", 13, C.text, true)
     heading.Position = UDim2.fromOffset(15, 0); heading.Size = UDim2.new(1, -65, 1, 0)
@@ -3543,9 +3543,9 @@ function H.OpenPlayerProfile(player)
 
     local body = H.Create("ScrollingFrame", {Position = UDim2.fromOffset(0,43), Size = UDim2.new(1,0,1,-43), BackgroundTransparency = 1,
         BorderSizePixel = 0, ScrollBarThickness = 3, ScrollBarImageColor3 = C.purple,
-        CanvasSize = UDim2.fromOffset(0, 710)}, panel)
-    local avatar = H.Create("ImageLabel", {Position = UDim2.fromOffset(16,14), Size = UDim2.fromOffset(67,67), BackgroundColor3 = C.selected, Image = ""}, body)
-    H.Corner(avatar, 10)
+        CanvasSize = UDim2.fromOffset(0, 920)}, panel)
+    local avatar = H.Create("ImageLabel", {Position = UDim2.fromOffset(16,14), Size = UDim2.fromOffset(72,72), BackgroundColor3 = C.selected, Image = ""}, body)
+    H.Corner(avatar, 8)
     local name = H.Label(body, player.DisplayName, 17, C.text, true)
     name.Position = UDim2.fromOffset(94, 16); name.Size = UDim2.new(1,-108,0,24)
     local user = H.Label(body, "@"..player.Name, 12, C.muted)
@@ -3556,16 +3556,32 @@ function H.OpenPlayerProfile(player)
     created.Position = UDim2.fromOffset(16,94); created.Size = UDim2.new(1,-32,0,19)
     local age = H.Label(body, "Account age: "..tostring(player.AccountAge).." days", 11, C.muted)
     age.Position = UDim2.fromOffset(16,115); age.Size = UDim2.new(1,-32,0,19)
-    local stats = H.Label(body, "Friends: ...    Followers: ...    Following: ...", 11, C.text, true)
-    stats.Position = UDim2.fromOffset(16,143); stats.Size = UDim2.new(1,-32,0,26)
+    local statLabels = {}
+    local statNames = {"Friends", "Followers", "Following"}
+    for i, title in ipairs(statNames) do
+        local cell = H.Create("Frame", {
+            Position=UDim2.new((i-1)/3, 16+(i-1)*3, 0, 148),
+            Size=UDim2.new(1/3,-16,0,54),
+            BackgroundColor3=C.card, BorderSizePixel=0
+        },body)
+        H.Corner(cell,7); H.Stroke(cell,C.border,1)
+        local number = H.Label(cell,"...",16,C.text,true)
+        number.TextXAlignment=Enum.TextXAlignment.Center
+        number.Size=UDim2.new(1,0,0,30)
+        local caption = H.Label(cell,title,10,C.muted)
+        caption.TextXAlignment=Enum.TextXAlignment.Center
+        caption.Position=UDim2.fromOffset(0,30)
+        caption.Size=UDim2.new(1,0,0,18)
+        statLabels[i]=number
+    end
 
     local labels = {"Spy", "TP", "Highlight", "Add Friend", "Copy Profile Link", "Fling"}
     local buttons = {}
     for i, label in ipairs(labels) do
         local col, row = (i-1)%2, math.floor((i-1)/2)
         local button = H.Create("TextButton", {
-            Position = UDim2.new(col*0.5, 16 + col*4, 0, 183 + row*45),
-            Size = UDim2.new(0.5,-22,0,36), BackgroundColor3 = C.selected,
+            Position = UDim2.new(col*0.5, 16 + col*4, 0, 215 + row*43),
+            Size = UDim2.new(0.5,-22,0,35), BackgroundColor3 = C.selected,
             Text = label, TextColor3 = C.text, Font = Enum.Font.GothamBold,
             TextSize = label == "Copy Profile Link" and 10 or 12, AutoButtonColor = false
         }, body)
@@ -3612,60 +3628,121 @@ function H.OpenPlayerProfile(player)
     end)
 
     local friendsTitle = H.Label(body, "FRIENDS", 12, C.text, true)
-    friendsTitle.Position = UDim2.fromOffset(16,331); friendsTitle.Size = UDim2.new(1,-32,0,25)
-    local friendsList = H.Create("Frame", {Position = UDim2.fromOffset(16,365), Size = UDim2.new(1,-32,0,330), BackgroundTransparency=1}, body)
+    friendsTitle.Position = UDim2.fromOffset(16,355); friendsTitle.Size = UDim2.new(1,-32,0,25)
+    local friendsList = H.Create("Frame", {
+        Position=UDim2.fromOffset(16,387), Size=UDim2.new(1,-32,0,500),
+        BackgroundTransparency=1
+    },body)
     local friendsStatus = H.Label(friendsList, "Loading friends...", 11, C.muted)
-    friendsStatus.Size = UDim2.new(1,0,0,25)
-    local function current() return Alive and generation == ProfileGeneration and panel.Parent ~= nil end
+    friendsStatus.Size=UDim2.new(1,0,0,25)
+    local function current()
+        return Alive and generation == ProfileGeneration and panel.Parent ~= nil
+    end
     task.spawn(function()
-        local ok, thumbnail = pcall(function()
+        local ok, thumbnail=pcall(function()
             return Players:GetUserThumbnailAsync(player.UserId,Enum.ThumbnailType.HeadShot,Enum.ThumbnailSize.Size150x150)
         end)
-        if ok and current() then avatar.Image = thumbnail end
+        if ok and current() then avatar.Image=thumbnail end
     end)
-    -- External endpoints may be blocked by the game/executor; show N/A on failure.
     task.spawn(function()
         local function request(url)
-            local ok, response = pcall(function() return HttpService:JSONDecode(game:HttpGet(url)) end)
-            return ok and type(response)=="table" and response or nil
+            local ok, result=pcall(function()
+                return HttpService:JSONDecode(game:HttpGet(url))
+            end)
+            return ok and type(result)=="table" and result or nil
         end
-        local userInfo = request("https://users.roblox.com/v1/users/"..player.UserId)
-        local followers = request("https://friends.roblox.com/v1/users/"..player.UserId.."/followers/count")
-        local following = request("https://friends.roblox.com/v1/users/"..player.UserId.."/followings/count")
-        local friendsCount = request("https://friends.roblox.com/v1/users/"..player.UserId.."/friends/count")
+        local info=request("https://users.roblox.com/v1/users/"..player.UserId)
+        local followers=request("https://friends.roblox.com/v1/users/"..player.UserId.."/followers/count")
+        local following=request("https://friends.roblox.com/v1/users/"..player.UserId.."/followings/count")
+        local friendsCount=request("https://friends.roblox.com/v1/users/"..player.UserId.."/friends/count")
         if not current() then return end
-        if userInfo and type(userInfo.created)=="string" then
-            created.Text = "Joined Roblox: "..userInfo.created:sub(1,10)
-        else created.Text = "Joined Roblox: N/A" end
-        stats.Text = "Friends: "..tostring(friendsCount and friendsCount.count or "N/A")
-            .."    Followers: "..tostring(followers and followers.count or "N/A")
-            .."    Following: "..tostring(following and following.count or "N/A")
+        created.Text="Joined Roblox: "..(info and type(info.created)=="string" and info.created:sub(1,10) or "N/A")
+        statLabels[1].Text=tostring(friendsCount and friendsCount.count or "N/A")
+        statLabels[2].Text=tostring(followers and followers.count or "N/A")
+        statLabels[3].Text=tostring(following and following.count or "N/A")
     end)
     task.spawn(function()
-        local ok, pages = pcall(function() return Players:GetFriendsAsync(player.UserId) end)
+        local ok, pages=pcall(function() return Players:GetFriendsAsync(player.UserId) end)
         if not current() then return end
-        if not ok or not pages then friendsStatus.Text = "Friends unavailable"; return end
+        if not ok or not pages then friendsStatus.Text="Friends unavailable"; return end
         friendsStatus:Destroy()
-        local count = 0
-        local okPage = pcall(function()
-            for _, friend in ipairs(pages:GetCurrentPage()) do
-                if not current() or count >= 10 then break end
-                count += 1
-                local entry = H.Create("TextButton", {Position=UDim2.fromOffset(0,(count-1)*31),
-                    Size=UDim2.new(1,0,0,28), BackgroundColor3=C.card,
-                    Text=(friend.DisplayName or friend.Username or "Unknown").."  @"..(friend.Username or ""),
-                    TextColor3=C.text, TextSize=11, Font=Enum.Font.Gotham, AutoButtonColor=false}, friendsList)
-                H.Corner(entry,5)
-                H.Bind(entry.MouseButton1Click,function()
-                    local online = Players:GetPlayerByUserId(friend.Id)
-                    if online then H.OpenPlayerProfile(online) end
-                end)
+        local allFriends={}
+        local pageOk=pcall(function()
+            while current() and #allFriends < 200 do
+                for _, friend in ipairs(pages:GetCurrentPage()) do
+                    if #allFriends >= 200 then break end
+                    table.insert(allFriends,friend)
+                end
+                if pages.IsFinished then break end
+                pages:AdvanceToNextPageAsync()
             end
         end)
-        if not okPage or count == 0 then
-            local label = H.Label(friendsList, "No friends available", 11, C.muted)
-            label.Size = UDim2.new(1,0,0,24)
+        if not current() then return end
+        if #allFriends==0 then
+            local empty=H.Label(friendsList,pageOk and "No friends available" or "Friends unavailable",11,C.muted)
+            empty.Size=UDim2.new(1,0,0,24)
+            return
         end
+        -- Profile cards: four columns, portraits, display names and @usernames.
+        local columns, tileHeight = 4, 108
+        for i, friend in ipairs(allFriends) do
+            if not current() then return end
+            local col=(i-1)%columns
+            local row=math.floor((i-1)/columns)
+            local entry=H.Create("TextButton",{
+                Position=UDim2.new(col/columns,4,0,row*tileHeight+3),
+                Size=UDim2.new(1/columns,-8,0,tileHeight-7),
+                BackgroundColor3=C.card, BorderSizePixel=0,
+                Text="", AutoButtonColor=false
+            },friendsList)
+            H.Corner(entry,7); H.Stroke(entry,C.border,1)
+            local portrait=H.Create("ImageLabel",{
+                Position=UDim2.new(0.5,-25,0,8),
+                Size=UDim2.fromOffset(50,50),
+                BackgroundColor3=C.selected, BorderSizePixel=0,
+                Image="",ScaleType=Enum.ScaleType.Crop
+            },entry)
+            H.Create("UICorner",{CornerRadius=UDim.new(1,0)},portrait)
+            local display=H.Label(entry,friend.DisplayName or friend.Username or "Unknown",10,C.text,true)
+            display.Position=UDim2.fromOffset(3,63)
+            display.Size=UDim2.new(1,-6,0,15)
+            display.TextXAlignment=Enum.TextXAlignment.Center
+            local username=H.Label(entry,"@"..(friend.Username or ""),9,C.muted)
+            username.Position=UDim2.fromOffset(3,80)
+            username.Size=UDim2.new(1,-6,0,14)
+            username.TextXAlignment=Enum.TextXAlignment.Center
+            -- Only indicate online when verified from the current server.
+            -- Other online status requires a separate authorized presence API.
+            if Players:GetPlayerByUserId(friend.Id) then
+                local dot=H.Create("Frame",{
+                    Position=UDim2.new(0.5,13,0,44),
+                    Size=UDim2.fromOffset(11,11),
+                    BackgroundColor3=Color3.fromRGB(60,215,110),
+                    BorderSizePixel=0
+                },entry)
+                H.Create("UICorner",{CornerRadius=UDim.new(1,0)},dot)
+                H.Stroke(dot,C.card,2)
+            end
+            H.Bind(entry.MouseEnter,function()
+                H.Tween(entry,{BackgroundColor3=C.hover},0.15)
+            end)
+            H.Bind(entry.MouseLeave,function()
+                H.Tween(entry,{BackgroundColor3=C.card},0.15)
+            end)
+            H.Bind(entry.MouseButton1Click,function()
+                local online=Players:GetPlayerByUserId(friend.Id)
+                if online then H.OpenPlayerProfile(online) end
+            end)
+            task.spawn(function()
+                local thumbOk,thumb=pcall(function()
+                    return Players:GetUserThumbnailAsync(friend.Id,Enum.ThumbnailType.HeadShot,Enum.ThumbnailSize.Size100x100)
+                end)
+                if thumbOk and current() and portrait.Parent then portrait.Image=thumb end
+            end)
+            if i%12==0 then task.wait() end
+        end
+        friendsList.Size=UDim2.new(1,-32,0,math.ceil(#allFriends/columns)*tileHeight+8)
+        body.CanvasSize=UDim2.fromOffset(0,387+math.ceil(#allFriends/columns)*tileHeight+20)
     end)
 end
 
@@ -3737,6 +3814,12 @@ function H.MakePlayerCard(player, order)
         ZIndex = 3
     }, card)
     H.Corner(profileButton, 7)
+    H.Bind(profileButton.MouseEnter, function()
+        H.Tween(profileButton,{BackgroundColor3=C.hover,TextColor3=C.text},0.16)
+    end)
+    H.Bind(profileButton.MouseLeave, function()
+        H.Tween(profileButton,{BackgroundColor3=C.selected,TextColor3=C.purple},0.16)
+    end)
     H.Bind(profileButton.MouseButton1Click, function() H.OpenPlayerProfile(player) end)
     display.Size = UDim2.new(1, -178, 0, 24)
     username.Size = UDim2.new(1, -178, 0, 19)
@@ -5270,7 +5353,7 @@ _G.KHASTIFY_HUB_CLEANUP = function()
 end
 
 print("====================================")
-print("KHASTIFY'S UNIVERSAL HUB V59")
+print("KHASTIFY'S UNIVERSAL HUB V60")
 print("FAVORITES SYSTEM ADDED")
 print("CHARMS ESP ADDED")
 print("SKELETON ESP ADDED")
