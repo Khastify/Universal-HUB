@@ -1,6 +1,6 @@
 local H = {} -- Namespaced functions reduce top-level Luau registers
 --[[
-    KHASTIFY'S UNIVERSAL HUB V61
+    KHASTIFY'S UNIVERSAL HUB V62
 
     NEW:
     - Favorites category
@@ -2209,7 +2209,7 @@ Brand.Position = UDim2.fromOffset(24, 31)
 Brand.Size = UDim2.fromOffset(135, 25)
 
 local Version = H.Label(
-    Sidebar, "universal hub v61", 11, C.muted
+    Sidebar, "universal hub v62", 11, C.muted
 )
 
 Version.Position = UDim2.fromOffset(24, 57)
@@ -3490,7 +3490,7 @@ UpdateSpyButtons = function()
     end
 end
 
--- V61 floating player profile; requests are only made when a profile opens.
+-- V62 floating player profile; requests are only made when a profile opens.
 local ProfileWindow
 local ProfileGeneration = 0
 local ProfileHighlight
@@ -3519,6 +3519,14 @@ function H.OpenPlayerProfile(player)
     ProfileWindow = panel
     H.Corner(panel, 17); H.Stroke(panel, C.border, 1)
     local header = H.Create("Frame", {Size = UDim2.new(1, 0, 0, 43), BackgroundColor3 = C.side, BorderSizePixel = 0, Active = true}, panel)
+    -- Round the top of the header to match the outer window, but keep its bottom edge square.
+    H.Corner(header, 17)
+    H.Create("Frame", {
+        Position = UDim2.fromOffset(0, 17),
+        Size = UDim2.new(1, 0, 0, 26),
+        BackgroundColor3 = C.side,
+        BorderSizePixel = 0
+    }, header)
     local heading = H.Label(header, "PLAYER PROFILE", 13, C.text, true)
     heading.Position = UDim2.fromOffset(15, 0); heading.Size = UDim2.new(1, -65, 1, 0)
     local close = H.Create("TextButton", {Position = UDim2.new(1,-36,0,7), Size = UDim2.fromOffset(28,28), BackgroundTransparency = 1, Text = "×", TextColor3 = C.muted, TextSize = 24}, header)
@@ -3580,8 +3588,9 @@ function H.OpenPlayerProfile(player)
     for i, label in ipairs(labels) do
         local col, row = (i-1)%2, math.floor((i-1)/2)
         local button = H.Create("TextButton", {
-            Position = UDim2.new(col*0.5, 16 + col*4, 0, 215 + row*43),
-            Size = UDim2.new(0.5,-22,0,35), BackgroundColor3 = C.selected,
+            -- Align both columns to the friends grid's 16px side margins, with an 8px gap.
+            Position = UDim2.new(col*0.5, 16 - col*12, 0, 215 + row*43),
+            Size = UDim2.new(0.5,-20,0,35), BackgroundColor3 = C.selected,
             Text = label, TextColor3 = C.text, Font = Enum.Font.GothamBold,
             TextSize = label == "Copy Profile Link" and 10 or 12, AutoButtonColor = false
         }, body)
@@ -5368,7 +5377,7 @@ _G.KHASTIFY_HUB_CLEANUP = function()
 end
 
 print("====================================")
-print("KHASTIFY'S UNIVERSAL HUB V61")
+print("KHASTIFY'S UNIVERSAL HUB V62")
 print("FAVORITES SYSTEM ADDED")
 print("CHARMS ESP ADDED")
 print("SKELETON ESP ADDED")
