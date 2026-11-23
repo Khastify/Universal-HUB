@@ -1,6 +1,6 @@
 local H = {} -- Namespaced functions reduce top-level Luau registers
 --[[
-    KHASTIFY'S UNIVERSAL HUB V54
+    KHASTIFY'S UNIVERSAL HUB V55
 
     NEW:
     - Favorites category
@@ -330,13 +330,14 @@ local State = {
     fullbright = false,
     charms = false,
     skeleton = false,
+    antiInvis = false,
     autoExecute = false,
     menuKey = "K",
     uiX = 0.5,
     uiY = 0.5
 }
 
-local PersistentKeys = {"fly", "flyAnim", "noclip", "infiniteJump", "clickTP", "airWalk", "invisible", "headless", "freeze", "fullbright", "charms", "skeleton"}
+local PersistentKeys = {"fly", "flyAnim", "noclip", "infiniteJump", "clickTP", "airWalk", "invisible", "headless", "freeze", "fullbright", "charms", "skeleton", "antiInvis"}
 local ESPColors = {charms = Color3.fromRGB(157,91,255), skeleton = Color3.fromRGB(157,91,255)}
 local function ColorToSave(color)
     return {math.floor(color.R*255+0.5),math.floor(color.G*255+0.5),math.floor(color.B*255+0.5)}
@@ -882,7 +883,7 @@ end
 function H.MirrorAvatar()
     if not InvisibleActive or not VisualAvatar then return end
 
-    local offset = Vector3.new(0, OFFSET, 0)
+    local offset = Vector3.new(0, OFFSET - 1, 0)
 
     for _, pair in ipairs(PartPairs) do
         if pair.source.Parent and pair.visual.Parent then
@@ -1687,7 +1688,7 @@ H.Bind(Players.PlayerRemoving, function(player)
 end)
 
 --==================================================
--- V54 CHARMS ESP
+-- V55 CHARMS ESP
 --==================================================
 
 local ESP = {
@@ -1695,7 +1696,8 @@ local ESP = {
     skeletons = {},
     characterConnections = {},
     playerConnections = {},
-    elapsed = 0
+    elapsed = 0,
+    skeletonRefreshElapsed = 0
 }
 
 local ESPColor = C.purple -- fallback only; each ESP has independent saved color
@@ -1869,7 +1871,151 @@ function H.SetCharms(enabled)
 end
 
 --==================================================
--- V54 SKELETON ESP
+-- ANTI INVIS: CLIENT-VISIBLE TRANSPARENCY DETECTION
+-- Rebuild only invisible characters, never visible ones.
+--==================================================
+
+local AntiInvis = {records = {}, elapsed = 0}
+
+function H.AntiInvisRemove(player)
+    local record = AntiInvis.records[player]
+    if not record then return end
+    if record.clone then record.clone:Destroy() end
+    AntiInvis.records[player] = nil
+end
+
+function H.AntiInvisClear()
+    for player in pairs(AntiInvis.records) do
+        H.AntiInvisRemove(player)
+    end
+end
+
+function H.AntiInvisRecord(player, character)
+    local record = AntiInvis.records[player]
+    if record and record.character ~= character then
+        H.AntiInvisRemove(player)
+        record = nil
+    end
+    if not record then
+        record = {character = character, original = {}, clone = nil, pairs = {}}
+        AntiInvis.records[player] = record
+    end
+    return record
+end
+
+function H.AntiInvisCheck(player)
+    if player == LP then return end
+    local character = player.Character
+    if not character or not character.Parent then
+        H.AntiInvisRemove(player)
+        return
+    end
+    local record = H.AntiInvisRecord(player, character)
+    local total, hidden = 0, 0
+    for _, part in ipairs(character:GetChildren()) do
+        if part:IsA("BasePart") and part.Name ~= "HumanoidRootPart" then
+            total += 1
+            if part.Transparency >= 0.95 then
+                hidden += 1
+            elseif not record.clone then
+                record.original[part.Name] = part.Transparency
+            end
+        end
+    end
+    -- Avoid triggering on naturally invisible root parts or one-off effects.
+    local invisible = total >= 3 and hidden / total >= 0.85
+    if not invisible then
+        if record.clone then
+            record.clone:Destroy()
+            record.clone = nil
+            table.clear(record.pairs)
+        end
+        return
+    end
+    if record.clone then return end
+
+    local archivable = character.Archivable
+    character.Archivable = true
+    local ok, clone = pcall(function() return character:Clone() end)
+    character.Archivable = archivable
+    if not ok or not clone then return end
+    clone.Name = "KHASTIFY_AntiInvisAvatar"
+    local sourceParts = {}
+    for _, part in ipairs(character:GetDescendants()) do
+        if part:IsA("BasePart") then
+            sourceParts[H.PartPath(part, character)] = part
+        end
+    end
+    for _, obj in ipairs(clone:GetDescendants()) do
+        if obj:IsA("Script") or obj:IsA("LocalScript") then
+            obj:Destroy()
+        elseif obj:IsA("JointInstance") or obj:IsA("WeldConstraint")
+            or obj:IsA("Constraint") then
+            obj:Destroy()
+        elseif obj:IsA("BasePart") then
+            obj.Anchored = true
+            obj.CanCollide = false
+            obj.CanTouch = false
+            obj.CanQuery = false
+            obj.CastShadow = false
+            obj.LocalTransparencyModifier = 0
+            if obj.Name == "HumanoidRootPart" then
+                obj.Transparency = 1
+            else
+                obj.Transparency = record.original[obj.Name] or 0
+            end
+            local source = sourceParts[H.PartPath(obj, clone)]
+            if source then
+                table.insert(record.pairs, {source = source, visual = obj})
+            end
+        elseif obj:IsA("Decal") or obj:IsA("Texture") then
+            obj.Transparency = 0
+        elseif obj:IsA("ParticleEmitter") or obj:IsA("Trail") or obj:IsA("Beam") then
+            obj.Enabled = false
+        end
+    end
+    clone.Parent = workspace
+    record.clone = clone
+end
+
+function H.AntiInvisUpdate(dt)
+    if not State.antiInvis then return end
+    AntiInvis.elapsed += dt
+    if AntiInvis.elapsed < 0.2 then return end
+    AntiInvis.elapsed = 0
+    for _, player in ipairs(Players:GetPlayers()) do
+        H.AntiInvisCheck(player)
+    end
+end
+
+function H.AntiInvisRender()
+    if not State.antiInvis then return end
+    for player, record in pairs(AntiInvis.records) do
+        if record.clone and record.clone.Parent then
+            for _, pair in ipairs(record.pairs) do
+                if pair.source.Parent and pair.visual.Parent then
+                    pair.visual.CFrame = pair.source.CFrame
+                    pair.visual.Size = pair.source.Size
+                end
+            end
+        end
+    end
+end
+
+function H.SetAntiInvis(enabled)
+    State.antiInvis = enabled
+    if not enabled then
+        H.AntiInvisClear()
+        AntiInvis.elapsed = 0
+    else
+        AntiInvis.elapsed = 0.2
+    end
+end
+
+H.Bind(Players.PlayerRemoving, H.AntiInvisRemove)
+
+--==================================================
+-- V55 SKELETON ESP
 --==================================================
 
 local R6Bones = {
@@ -1972,33 +2118,31 @@ function H.CreateSkeleton(player)
     }
 end
 
-function H.UpdateSkeletons()
+-- Reconcile character models occasionally, not on every rendered frame.
+function H.RefreshSkeletons()
     if not State.skeleton then return end
-
-    local camera = workspace.CurrentCamera
-    if not camera then return end
-
     for _, player in ipairs(Players:GetPlayers()) do
         if player ~= LP then
             local data = ESP.skeletons[player]
-
-            if not data
-                or data.character ~= player.Character then
+            if not data or data.character ~= player.Character then
                 H.CreateSkeleton(player)
-                data = ESP.skeletons[player]
             end
+        end
+    end
+end
 
-            if data then
-                local valid =
-                    data.character
-                    and data.character.Parent
-                    and data.humanoid
-                    and data.humanoid.Parent
-                    and data.humanoid.Health > 0
+-- Project cached bone parts every frame so lines track the camera smoothly.
+function H.UpdateSkeletons()
+    if not State.skeleton then return end
+    local camera = workspace.CurrentCamera
+    if not camera then return end
 
-                if not valid then
-                    H.RemoveSkeleton(player)
-                else
+    for player, data in pairs(ESP.skeletons) do
+        if not player.Parent or not data.character or not data.character.Parent
+            or not data.humanoid or not data.humanoid.Parent
+            or data.humanoid.Health <= 0 then
+            H.RemoveSkeleton(player)
+        else
                     for _, bone in ipairs(data.lines) do
                         local first = bone.first
                         local second = bone.second
@@ -2050,8 +2194,6 @@ function H.UpdateSkeletons()
                             bone.frame.Visible = false
                         end
                     end
-                end
-            end
         end
     end
 end
@@ -2146,7 +2288,7 @@ Brand.Position = UDim2.fromOffset(24, 31)
 Brand.Size = UDim2.fromOffset(135, 25)
 
 local Version = H.Label(
-    Sidebar, "universal hub v54", 11, C.muted
+    Sidebar, "universal hub v55", 11, C.muted
 )
 
 Version.Position = UDim2.fromOffset(24, 57)
@@ -2620,7 +2762,7 @@ function H.MakeCard(height, order)
 end
 
 --==================================================
--- V54 FAVORITE STAR
+-- V55 FAVORITE STAR
 --==================================================
 
 function H.UpdateFavoriteButton(name)
@@ -3279,7 +3421,7 @@ function H.ESPFeature(name, key, setter)
 end
 
 --==================================================
--- COMMANDS PAGE - V54
+-- COMMANDS PAGE - V55
 --==================================================
 
 Sections.Commands = function()
@@ -3388,6 +3530,7 @@ Sections.Commands = function()
 
     H.ESPFeature("Charms ESP", "charms", H.SetCharms)
     H.ESPFeature("Skeleton ESP", "skeleton", H.SetSkeleton)
+    H.Toggle("Anti Invis", "antiInvis", "Visuals", H.SetAntiInvis)
 
     -- The Favorites category uses the same full command
     -- cards and functionality as the original categories.
@@ -4375,7 +4518,7 @@ Sections.Settings = function()
     local card = H.MakeCard(74)
 
     local title = H.Label(
-        card, "V54 GUI Icons", 14, C.text, true
+        card, "V55 GUI Icons", 14, C.text, true
     )
 
     title.Position = UDim2.fromOffset(14, 8)
@@ -4401,7 +4544,7 @@ Sections.Settings = function()
     description.Position = UDim2.fromOffset(14, 55)
     description.Size = UDim2.new(1, -28, 0, 17)
 
-    H.AddEntry(card, "v54 icon system", "All")
+    H.AddEntry(card, "v55 icon system", "All")
 end
 
 --==================================================
@@ -4782,13 +4925,24 @@ H.Bind(Run.Heartbeat, function(dt)
         H.UpdateNametags()
     end
 
+    -- Only discover/rebuild character skeletons twice per second.
+    if State.skeleton then
+        ESP.skeletonRefreshElapsed += dt
+        if ESP.skeletonRefreshElapsed >= 0.5 then
+            ESP.skeletonRefreshElapsed = 0
+            H.RefreshSkeletons()
+        end
+    end
+
+    H.AntiInvisUpdate(dt)
+
     -- Update Charms approximately 20 times per second.
     ESP.elapsed += dt
 
     if ESP.elapsed >= 0.05 then
         ESP.elapsed = 0
         H.UpdateCharms()
-        if State.skeleton then H.UpdateSkeletons() end
+        -- Skeleton drawing runs every rendered frame below.
     end
 
     if Active == "Servers" then
@@ -4819,8 +4973,11 @@ H.Bind(Run.RenderStepped, function()
         H.MirrorAvatar()
     end
 
-    -- Screen-space skeleton follows the current camera,
-    -- including while spectating with Spy.
+    H.AntiInvisRender()
+
+    -- Match camera updates without rebuilding any skeleton frames.
+    if State.skeleton then H.UpdateSkeletons() end
+
     if State.fly and FlyVelocity and FlyGyro then
         local camera = workspace.CurrentCamera
         if not camera then return end
@@ -4944,6 +5101,7 @@ task.defer(function()
     if State.freeze then pcall(H.Freeze, true) end
     if State.charms then pcall(H.SetCharms, true) end
     if State.skeleton then pcall(H.SetSkeleton, true) end
+    if State.antiInvis then pcall(H.SetAntiInvis, true) end
 end)
 
 --==================================================
@@ -4961,6 +5119,7 @@ _G.KHASTIFY_HUB_CLEANUP = function()
     H.DisconnectSpyTarget()
     H.CleanupNametags()
     H.CleanupESP()
+    H.SetAntiInvis(false)
 
     H.ClearPlayerCards()
     H.ClearServerCards()
@@ -4998,7 +5157,7 @@ _G.KHASTIFY_HUB_CLEANUP = function()
 end
 
 print("====================================")
-print("KHASTIFY'S UNIVERSAL HUB V54")
+print("KHASTIFY'S UNIVERSAL HUB V55")
 print("FAVORITES SYSTEM ADDED")
 print("CHARMS ESP ADDED")
 print("SKELETON ESP ADDED")
