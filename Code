@@ -1402,8 +1402,48 @@ local NametagSystem = {
     tags = {},
     originalDisplays = {},
     characterConnections = {},
-    elapsed = 0
+    elapsed = 0,
+    nativeScanElapsed = 0,
+    hiddenNativeTags = {}
 }
+
+-- Only hide name-only BillboardGuis attached to a player character.
+-- Record original Enabled states so unloading restores the game UI.
+function H.HideNativeNametags(player)
+    local character = player.Character
+    if not character then return end
+    for _, obj in ipairs(character:GetDescendants()) do
+        if obj:IsA("BillboardGui") and obj.Name ~= "KHASTIFY_CameraNametag"
+            and NametagSystem.hiddenNativeTags[obj] == nil then
+            local hasName = false
+            local hasOtherText = false
+            for _, child in ipairs(obj:GetDescendants()) do
+                if child:IsA("TextLabel") or child:IsA("TextButton") then
+                    local value = child.Text:gsub("^%s+", ""):gsub("%s+$", "")
+                    if value == player.DisplayName or value == player.Name
+                        or value == ("@" .. player.Name) then
+                        hasName = true
+                    elseif value ~= "" then
+                        hasOtherText = true
+                    end
+                end
+            end
+            if hasName and not hasOtherText then
+                NametagSystem.hiddenNativeTags[obj] = obj.Enabled
+                obj.Enabled = false
+            end
+        end
+    end
+end
+
+function H.RestoreNativeNametags()
+    for gui, enabled in pairs(NametagSystem.hiddenNativeTags) do
+        if gui and gui.Parent then
+            pcall(function() gui.Enabled = enabled end)
+        end
+        NametagSystem.hiddenNativeTags[gui] = nil
+    end
+end
 
 function H.RestoreNametagDisplay(humanoid)
     local original = NametagSystem.originalDisplays[humanoid]
@@ -1483,6 +1523,8 @@ function H.CreateNametag(player)
         TextYAlignment = Enum.TextYAlignment.Center
     }, billboard)
 
+    H.HideNativeNametags(player)
+
     NametagSystem.tags[player] = {
         gui = billboard,
         label = nameLabel,
@@ -1542,6 +1584,14 @@ end
 function H.UpdateNametags()
     if not NametagSystem.enabled then return end
 
+    NametagSystem.nativeScanElapsed += 0.05
+    if NametagSystem.nativeScanElapsed >= 1 then
+        NametagSystem.nativeScanElapsed = 0
+        for player in pairs(NametagSystem.tags) do
+            H.HideNativeNametags(player)
+        end
+    end
+
     local camera = workspace.CurrentCamera
     if not camera then return end
 
@@ -1594,6 +1644,7 @@ end
 
 function H.CleanupNametags()
     NametagSystem.enabled = false
+    H.RestoreNativeNametags()
 
     for player, connection in pairs(
         NametagSystem.characterConnections
@@ -1652,7 +1703,10 @@ local function RecolorESP(kind)
     local color = ESPColors[kind]
     if kind == "charms" then
         for _, data in pairs(ESP.charms) do
-            if data.highlight then data.highlight.OutlineColor = color end
+            if data.highlight then
+                data.highlight.OutlineColor = color
+                data.highlight.FillColor = color
+            end
             if data.fallbackHighlight then data.fallbackHighlight.OutlineColor = color end
         end
     else
@@ -1741,24 +1795,15 @@ function H.CreateCharms(player)
         Adornee = character,
         DepthMode = Enum.HighlightDepthMode.AlwaysOnTop,
         FillColor = ESPColors.charms,
-        FillTransparency = 0.65,
+        FillTransparency = 1,
         OutlineColor = ESPColors.charms,
         OutlineTransparency = 0,
         Enabled = true
     }, character)
 
-    local fallback, parts = H.MakeCharmsFallback(character)
-
-    local fallbackHighlight = H.Create("Highlight", {
-        Name = "KHASTIFY_CharmsFallbackHighlight",
-        Adornee = fallback,
-        DepthMode = Enum.HighlightDepthMode.AlwaysOnTop,
-        FillColor = ESPColors.charms,
-        FillTransparency = 0.72,
-        OutlineColor = ESPColors.charms,
-        OutlineTransparency = 0,
-        Enabled = false
-    }, fallback)
+    -- Do not spawn a second proxy avatar: it caused solid purple doubles
+    -- and substantial per-frame work in populated servers.
+    local fallback, parts, fallbackHighlight = nil, {}, nil
 
     ESP.charms[player] = {
         character = character,
@@ -1794,29 +1839,7 @@ function H.UpdateCharms()
                 if not valid then
                     H.RemoveCharms(player)
                 else
-                    local visibleParts = 0
-                    local totalParts = 0
-
-                    for _, pair in ipairs(data.parts) do
-                        if pair.source.Parent and pair.proxy.Parent then
-                            pair.proxy.CFrame = pair.source.CFrame
-                            pair.proxy.Size = pair.source.Size
-
-                            totalParts += 1
-
-                            if pair.source.Transparency < 0.98
-                                and pair.source.LocalTransparencyModifier < 0.98 then
-                                visibleParts += 1
-                            end
-                        end
-                    end
-
-                    local invisible =
-                        totalParts > 0
-                        and visibleParts == 0
-
-                    data.highlight.Enabled = not invisible
-                    data.fallbackHighlight.Enabled = invisible
+                    data.highlight.Enabled = true
                 end
             end
         end
@@ -1888,6 +1911,8 @@ end
 
 function H.CreateSkeleton(player)
     H.RemoveSkeleton(player)
+    local stale = Parent:FindFirstChild("KHASTIFY_SkeletonESP_" .. player.UserId)
+    if stale then stale:Destroy() end
 
     if not State.skeleton
         or player == LP
@@ -1934,8 +1959,8 @@ function H.CreateSkeleton(player)
 
         table.insert(lines, {
             frame = line,
-            first = pair[1],
-            second = pair[2]
+            first = character:FindFirstChild(pair[1]),
+            second = character:FindFirstChild(pair[2])
         })
     end
 
@@ -1975,11 +2000,8 @@ function H.UpdateSkeletons()
                     H.RemoveSkeleton(player)
                 else
                     for _, bone in ipairs(data.lines) do
-                        local first =
-                            data.character:FindFirstChild(bone.first)
-
-                        local second =
-                            data.character:FindFirstChild(bone.second)
+                        local first = bone.first
+                        local second = bone.second
 
                         if first and second
                             and first:IsA("BasePart")
@@ -4766,6 +4788,7 @@ H.Bind(Run.Heartbeat, function(dt)
     if ESP.elapsed >= 0.05 then
         ESP.elapsed = 0
         H.UpdateCharms()
+        if State.skeleton then H.UpdateSkeletons() end
     end
 
     if Active == "Servers" then
@@ -4798,10 +4821,6 @@ H.Bind(Run.RenderStepped, function()
 
     -- Screen-space skeleton follows the current camera,
     -- including while spectating with Spy.
-    if State.skeleton then
-        H.UpdateSkeletons()
-    end
-
     if State.fly and FlyVelocity and FlyGyro then
         local camera = workspace.CurrentCamera
         if not camera then return end
