@@ -97,7 +97,7 @@ function H.Label(parent, value, size, color, bold)
 end
 
 function H.Tween(obj, props, duration)
-    local tween = TweenService:H.Create(
+    local tween = TweenService:Create(
         obj,
         TweenInfo.new(
             duration or 0.2,
