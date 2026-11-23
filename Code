@@ -1,6 +1,6 @@
 local H = {} -- Namespaced functions reduce top-level Luau registers
 --[[
-    KHASTIFY'S UNIVERSAL HUB V68
+    KHASTIFY'S UNIVERSAL HUB V69
 
     NEW:
     - Favorites category
@@ -966,7 +966,7 @@ end
 function H.MirrorAvatar()
     if not InvisibleActive or not VisualAvatar then return end
 
-    local offset = Vector3.new(0, OFFSET - 1, 0)
+    local offset = Vector3.new(0, OFFSET - 0.5, 0)
 
     for _, pair in ipairs(PartPairs) do
         if pair.source.Parent and pair.visual.Parent then
@@ -2294,7 +2294,7 @@ Brand.Position = UDim2.fromOffset(24, 31)
 Brand.Size = UDim2.fromOffset(135, 25)
 
 local Version = H.Label(
-    Sidebar, "universal hub v68", 11, C.muted
+    Sidebar, "universal hub v69", 11, C.muted
 )
 
 Version.Position = UDim2.fromOffset(24, 57)
@@ -3576,7 +3576,7 @@ UpdateSpyButtons = function()
     end
 end
 
--- V68 floating player profile; requests are only made when a profile opens.
+-- V69 floating player profile; requests are only made when a profile opens.
 -- Targeted physics fling. Roblox server physics/network ownership may reject it.
 local FlingBusy = false
 local FlingCancel = false
@@ -3608,7 +3608,9 @@ function H.FlingPlayer(targetPlayer)
             end
             H.AntiFlingGrace(5)
             -- Keep the character controllable and restore its original state afterward.
-            root.CanCollide = false
+            -- Allow physical contact during the maneuver. Restore the prior
+            -- collision setting on completion, including interrupted attempts.
+            root.CanCollide = true
             spin = Instance.new("BodyAngularVelocity")
             spin.Name = "KHASTIFY_TargetFling"
             spin.AngularVelocity = Vector3.new(0, 100000, 0)
@@ -3618,6 +3620,7 @@ function H.FlingPlayer(targetPlayer)
 
             local started = os.clock()
             local tickIndex = 0
+            local smoothedVelocity = Vector3.zero
             while Alive and not FlingCancel and os.clock() - started < 1.3 do
                 if LP.Character ~= character or not root.Parent
                     or targetPlayer.Character ~= targetCharacter
@@ -3627,14 +3630,36 @@ function H.FlingPlayer(targetPlayer)
                 tickIndex += 1
                 local targetPosition = targetRoot.Position
                 local targetVelocity = targetRoot.AssemblyLinearVelocity
-                local lead = Vector3.new(targetVelocity.X, 0, targetVelocity.Z) * 0.08
+                -- Smooth velocity changes to avoid chasing an outdated position.
+                smoothedVelocity = smoothedVelocity:Lerp(targetVelocity, 0.4)
+                local horizontalVelocity = Vector3.new(smoothedVelocity.X, 0, smoothedVelocity.Z)
+                local lead = horizontalVelocity * 0.11
                 local angle = tickIndex * 2.4
-                local offset = Vector3.new(math.cos(angle)*1.4, (tickIndex%4)*0.7-0.5, math.sin(angle)*1.4)
+                local offset = Vector3.new(math.cos(angle)*0.8, (tickIndex%4)*0.55-0.4, math.sin(angle)*0.8)
                 -- Visual multi-axis tumble: preserve the existing orbit and
                 -- launch settings while allowing the avatar to rotate.
                 local elapsed = os.clock() - started
                 local tumble = CFrame.Angles(elapsed * 11, elapsed * 16, elapsed * 9)
-                root.CFrame = CFrame.new(targetPosition + lead + offset) * tumble
+                -- Keep the spinning character above nearby solid ground.
+                -- Target-relative positions alone can clip beneath sloped floors
+                -- or platforms, particularly during high-speed movement.
+                local desiredPosition = targetPosition + lead + offset
+                local groundParams = RaycastParams.new()
+                groundParams.FilterType = Enum.RaycastFilterType.Exclude
+                groundParams.FilterDescendantsInstances = {character, targetCharacter}
+                groundParams.IgnoreWater = true
+                local groundHit = workspace:Raycast(
+                    Vector3.new(desiredPosition.X, targetPosition.Y + 7, desiredPosition.Z),
+                    Vector3.new(0, -20, 0), groundParams
+                )
+                if groundHit and groundHit.Normal.Y > 0.45 then
+                    desiredPosition = Vector3.new(
+                        desiredPosition.X,
+                        math.max(desiredPosition.Y, groundHit.Position.Y + 3),
+                        desiredPosition.Z
+                    )
+                end
+                root.CFrame = CFrame.new(desiredPosition) * tumble
                 root.AssemblyLinearVelocity = Vector3.new(0, 350, 0)
                 Run.Heartbeat:Wait()
             end
@@ -5563,7 +5588,7 @@ _G.KHASTIFY_HUB_CLEANUP = function()
 end
 
 print("====================================")
-print("KHASTIFY'S UNIVERSAL HUB V68")
+print("KHASTIFY'S UNIVERSAL HUB V69")
 print("FAVORITES SYSTEM ADDED")
 print("CHARMS ESP ADDED")
 print("SKELETON ESP ADDED")
