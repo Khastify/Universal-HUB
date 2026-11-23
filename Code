@@ -336,6 +336,17 @@ local State = {
     uiY = 0.5
 }
 
+local PersistentKeys = {"fly", "flyAnim", "noclip", "infiniteJump", "clickTP", "airWalk", "invisible", "headless", "freeze", "fullbright", "charms", "skeleton"}
+local ESPColors = {charms = Color3.fromRGB(157,91,255), skeleton = Color3.fromRGB(157,91,255)}
+local function ColorToSave(color)
+    return {math.floor(color.R*255+0.5),math.floor(color.G*255+0.5),math.floor(color.B*255+0.5)}
+end
+local function ColorFromSave(rgb)
+    if type(rgb) ~= "table" then return nil end
+    local r,g,b=tonumber(rgb[1]),tonumber(rgb[2]),tonumber(rgb[3])
+    if not r or not g or not b then return nil end
+    return Color3.fromRGB(math.clamp(r,0,255),math.clamp(g,0,255),math.clamp(b,0,255))
+end
 local Keybinds = {Dash = "Q"}
 local Favorites = {}
 
@@ -373,6 +384,11 @@ do
             end
         end
 
+        if type(saved.espColors) == "table" then
+            for kind in pairs(ESPColors) do
+                ESPColors[kind] = ColorFromSave(saved.espColors[kind]) or ESPColors[kind]
+            end
+        end
         if type(saved.keybinds) == "table" then
             Keybinds = saved.keybinds
         end
@@ -389,17 +405,15 @@ do
 end
 
 function H.Save()
+    local storedState = {
+        flySpeed = State.flySpeed, speed = State.speed, jump = State.jump,
+        dashPower = State.dashPower, autoExecute = State.autoExecute,
+        menuKey = State.menuKey, uiX = State.uiX, uiY = State.uiY
+    }
+    for _, key in ipairs(PersistentKeys) do storedState[key] = State[key] end
     H.WriteJSON(SaveFile, {
-        state = {
-            flySpeed = State.flySpeed,
-            speed = State.speed,
-            jump = State.jump,
-            dashPower = State.dashPower,
-            autoExecute = State.autoExecute,
-            menuKey = State.menuKey,
-            uiX = State.uiX,
-            uiY = State.uiY
-        },
+        espColors = {charms = ColorToSave(ESPColors.charms), skeleton = ColorToSave(ESPColors.skeleton)},
+        state = storedState,
         keybinds = Keybinds,
         favorites = Favorites
     })
@@ -1665,7 +1679,20 @@ local ESP = {
     elapsed = 0
 }
 
-local ESPColor = C.purple
+local ESPColor = C.purple -- fallback only; each ESP has independent saved color
+local function RecolorESP(kind)
+    local color = ESPColors[kind]
+    if kind == "charms" then
+        for _, data in pairs(ESP.charms) do
+            if data.highlight then data.highlight.OutlineColor = color end
+            if data.fallbackHighlight then data.fallbackHighlight.OutlineColor = color end
+        end
+    else
+        for _, data in pairs(ESP.skeletons) do
+            for _, bone in ipairs(data.lines) do bone.frame.BackgroundColor3 = color end
+        end
+    end
+end
 
 function H.RemoveCharms(player)
     local data = ESP.charms[player]
@@ -1706,8 +1733,8 @@ function H.MakeCharmsFallback(character)
             proxy.CanQuery = false
             proxy.CastShadow = false
             proxy.Material = Enum.Material.SmoothPlastic
-            proxy.Color = ESPColor
-            proxy.Transparency = 0.5
+            proxy.Color = ESPColors.charms
+            proxy.Transparency = 0.01
             proxy.Size = part.Size
             proxy.CFrame = part.CFrame
             proxy.Parent = model
@@ -1745,9 +1772,9 @@ function H.CreateCharms(player)
         Name = "KHASTIFY_CharmsESP",
         Adornee = character,
         DepthMode = Enum.HighlightDepthMode.AlwaysOnTop,
-        FillColor = ESPColor,
-        FillTransparency = 0.65,
-        OutlineColor = ESPColor,
+        FillColor = ESPColors.charms,
+        FillTransparency = 1,
+        OutlineColor = ESPColors.charms,
         OutlineTransparency = 0,
         Enabled = true
     }, character)
@@ -1758,9 +1785,9 @@ function H.CreateCharms(player)
         Name = "KHASTIFY_CharmsFallbackHighlight",
         Adornee = fallback,
         DepthMode = Enum.HighlightDepthMode.AlwaysOnTop,
-        FillColor = ESPColor,
-        FillTransparency = 0.72,
-        OutlineColor = ESPColor,
+        FillColor = ESPColors.charms,
+        FillTransparency = 1,
+        OutlineColor = ESPColors.charms,
         OutlineTransparency = 0,
         Enabled = false
     }, fallback)
@@ -1929,13 +1956,13 @@ function H.CreateSkeleton(player)
             Name = "Bone" .. i,
             AnchorPoint = Vector2.new(0.5, 0.5),
             Size = UDim2.fromOffset(0, 2),
-            BackgroundColor3 = ESPColor,
+            BackgroundColor3 = ESPColors.skeleton,
             BorderSizePixel = 0,
             Visible = false,
             ZIndex = 10
         }, screen)
 
-        H.Corner(line, 2)
+        H.Corner(line, 3)
 
         table.insert(lines, {
             frame = line,
@@ -1990,15 +2017,26 @@ function H.UpdateSkeletons()
                             and first:IsA("BasePart")
                             and second:IsA("BasePart") then
 
-                            local p1, visible1 =
-                                camera:WorldToViewportPoint(
-                                    first.Position
-                                )
-
-                            local p2, visible2 =
-                                camera:WorldToViewportPoint(
-                                    second.Position
-                                )
+                            local function JointPoint(part, other)
+                                for _, motor in ipairs(data.character:GetDescendants()) do
+                                    if motor:IsA("Motor6D") then
+                                        if motor.Part0 == part and motor.Part1 == other then
+                                            return (motor.Part0.CFrame * motor.C0).Position
+                                        elseif motor.Part1 == part and motor.Part0 == other then
+                                            return (motor.Part1.CFrame * motor.C1).Position
+                                        end
+                                    end
+                                end
+                                return part.Position
+                            end
+                            local a = JointPoint(first, second)
+                            local b = JointPoint(second, first)
+                            if (a-b).Magnitude < 0.05 then
+                                a = first.Position:Lerp(a, 0.55)
+                                b = second.Position:Lerp(b, 0.55)
+                            end
+                            local p1, visible1 = camera:WorldToViewportPoint(a)
+                            local p2, visible2 = camera:WorldToViewportPoint(b)
 
                             if p1.Z > 0
                                 and p2.Z > 0
@@ -2753,9 +2791,9 @@ function H.Toggle(name, key, category, callback)
         if callback then callback(State[key]) end
 
         if status and status.Parent then
-            status.Text =
-                State[key] and "Enabled" or "Disabled"
+            status.Text = State[key] and "Enabled" or "Disabled"
         end
+        H.Save()
     end
 
     Commands[name] = Execute
@@ -2981,7 +3019,7 @@ function H.SliderFeature(
     default,
     callback
 )
-    local card = H.MakeCard(91)
+    local card = H.MakeCard(121)
 
     local title = H.Label(
         card, name, 14, C.text, true
@@ -3000,7 +3038,7 @@ function H.SliderFeature(
         maximum,
         default,
         callback,
-        35
+        63
     )
 
     H.AddEntry(card, name, category, false, name)
@@ -3087,11 +3125,88 @@ function H.CombinedFeature(
     return card, status
 end
 
+
+-- Expandable independent ESP color pickers; colors save even while disabled.
+local ESPPalette = {
+    Color3.fromRGB(157,91,255), Color3.fromRGB(70,135,255),
+    Color3.fromRGB(0,220,255), Color3.fromRGB(0,210,125),
+    Color3.fromRGB(255,225,60), Color3.fromRGB(255,155,40),
+    Color3.fromRGB(255,70,75), Color3.fromRGB(255,95,190),
+    Color3.fromRGB(255,255,255), Color3.fromRGB(25,25,30),
+    Color3.fromRGB(150,155,165), Color3.fromRGB(150,100,65),
+    Color3.fromRGB(200,155,255), Color3.fromRGB(130,195,255),
+    Color3.fromRGB(155,245,155), Color3.fromRGB(255,155,155)
+}
+local OpenESPCard = nil
+local ESPCardClosers = {}
+function H.ESPFeature(name, key, setter)
+    local card = H.MakeCard(63)
+    local status = H.Label(card, State[key] and "Enabled" or "Disabled", 12, C.faint)
+    status.Position = UDim2.fromOffset(15, 33)
+    status.Size = UDim2.new(1,-160,0,18)
+    local title = H.Label(card, name, 14, C.text, true)
+    title.Position = UDim2.fromOffset(15,8)
+    title.Size = UDim2.new(1,-160,0,24)
+    H.AddFavoriteButton(card,name,14)
+    H.AddKeybindButton(card,name,14)
+    local toggle = H.Create("TextButton", {Size=UDim2.new(1,-155,0,58), BackgroundTransparency=1,Text="",AutoButtonColor=false},card)
+    local function Execute()
+        setter(not State[key]); status.Text=State[key] and "Enabled" or "Disabled"; H.Save()
+    end
+    Commands[name]=Execute
+    H.Bind(toggle.MouseButton1Click,Execute)
+    local arrow = H.Create("TextButton", {Position=UDim2.new(1,-30,0,37),Size=UDim2.fromOffset(25,23),BackgroundTransparency=1,Text="⌄",TextColor3=C.purple,TextSize=19,Font=Enum.Font.GothamBold},card)
+    local picker = H.Create("Frame", {Position=UDim2.fromOffset(13,69),Size=UDim2.new(1,-26,0,85),BackgroundTransparency=1},card)
+    local caption=H.Label(picker,"ESP COLOR",11,C.muted,true)
+    caption.Size=UDim2.new(1,0,0,18)
+    local swatches={}
+    local function RefreshSwatches()
+        for _, item in ipairs(swatches) do
+            local selected = ESPColors[key] == item.color
+            item.stroke.Color = selected and C.purple or C.border
+            item.stroke.Thickness = selected and 3 or 1
+        end
+    end
+    for i,color in ipairs(ESPPalette) do
+        local col=(i-1)%8
+        local row=math.floor((i-1)/8)
+        local button=H.Create("TextButton", {Position=UDim2.fromOffset(col*39,22+row*30),Size=UDim2.fromOffset(27,25),BackgroundColor3=color,Text="",AutoButtonColor=false},picker)
+        H.Corner(button,5)
+        local stroke=H.Stroke(button,C.border,1)
+        table.insert(swatches,{color=color,stroke=stroke})
+        H.Bind(button.MouseButton1Click,function()
+            ESPColors[key]=color
+            RecolorESP(key)
+            RefreshSwatches()
+            H.Save()
+        end)
+    end
+    RefreshSwatches()
+    local expanded=false
+    local function SetExpanded(value)
+        expanded=value
+        arrow.Text=value and "⌃" or "⌄"
+        picker.Visible=value
+        H.Tween(card,{Size=UDim2.new(1,0,0,value and 165 or 63)},0.18)
+    end
+    ESPCardClosers[key]=SetExpanded
+    SetExpanded(false)
+    H.Bind(arrow.MouseButton1Click,function()
+        if not expanded then
+            for other, close in pairs(ESPCardClosers) do if other~=key then close(false) end end
+        end
+        SetExpanded(not expanded)
+    end)
+    H.AddEntry(card,name.." color", "Visuals",false,name)
+    return card
+end
+
 --==================================================
 -- COMMANDS PAGE - V54
 --==================================================
 
 Sections.Commands = function()
+    table.clear(ESPCardClosers)
     -- Five categories in the requested order.
     H.AddCategory("Favorites", 77)
     H.AddCategory("All", 42)
@@ -3147,8 +3262,8 @@ Sections.Commands = function()
                 H.StopFly()
             end
 
-            status.Text =
-                State.fly and "Enabled" or "Disabled"
+            status.Text = State.fly and "Enabled" or "Disabled"
+            H.Save()
         end
     )
 
@@ -3194,13 +3309,8 @@ Sections.Commands = function()
 
     H.Toggle("Fullbright", "fullbright", "Visuals", H.Fullbright)
 
-    H.Toggle("Charms ESP", "charms", "Visuals", function(enabled)
-        H.SetCharms(enabled)
-    end)
-
-    H.Toggle("Skeleton ESP", "skeleton", "Visuals", function(enabled)
-        H.SetSkeleton(enabled)
-    end)
+    H.ESPFeature("Charms ESP", "charms", H.SetCharms)
+    H.ESPFeature("Skeleton ESP", "skeleton", H.SetSkeleton)
 
     -- The Favorites category uses the same full command
     -- cards and functionality as the original categories.
@@ -4744,6 +4854,23 @@ if State.fullbright then
 end
 
 ShowSection("Commands")
+
+-- Restore persisted toggles after the character and GUI are ready.
+task.defer(function()
+    if not Alive then return end
+    local character = LP.Character or LP.CharacterAdded:Wait()
+    if not Alive or not character then return end
+    character:WaitForChild("HumanoidRootPart", 10)
+    character:WaitForChild("Humanoid", 10)
+    if not Alive then return end
+    if State.fly then pcall(H.StartFly) end
+    if State.airWalk then pcall(H.StartAirWalk) end
+    if State.invisible then pcall(H.SetInvisible, true) end
+    if State.headless then pcall(H.SetHeadless, true) end
+    if State.freeze then pcall(H.Freeze, true) end
+    if State.charms then pcall(H.SetCharms, true) end
+    if State.skeleton then pcall(H.SetSkeleton, true) end
+end)
 
 --==================================================
 -- CLEANUP
