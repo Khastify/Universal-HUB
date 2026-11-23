@@ -1,6 +1,6 @@
 local H = {} -- Namespaced functions reduce top-level Luau registers
 --[[
-    KHASTIFY'S UNIVERSAL HUB V66
+    KHASTIFY'S UNIVERSAL HUB V67
 
     NEW:
     - Favorites category
@@ -2294,7 +2294,7 @@ Brand.Position = UDim2.fromOffset(24, 31)
 Brand.Size = UDim2.fromOffset(135, 25)
 
 local Version = H.Label(
-    Sidebar, "universal hub v66", 11, C.muted
+    Sidebar, "universal hub v67", 11, C.muted
 )
 
 Version.Position = UDim2.fromOffset(24, 57)
@@ -3576,7 +3576,81 @@ UpdateSpyButtons = function()
     end
 end
 
--- V66 floating player profile; requests are only made when a profile opens.
+-- V67 floating player profile; requests are only made when a profile opens.
+-- Targeted physics fling. Roblox server physics/network ownership may reject it.
+local FlingBusy = false
+local FlingCancel = false
+
+function H.FlingPlayer(targetPlayer)
+    if FlingBusy or not targetPlayer or targetPlayer == LP then return end
+    local character, root, humanoid = H.Char(), H.Root(), H.Hum()
+    local targetCharacter = targetPlayer.Character
+    local targetRoot = targetCharacter and targetCharacter:FindFirstChild("HumanoidRootPart")
+    local targetHumanoid = targetCharacter and targetCharacter:FindFirstChildOfClass("Humanoid")
+    if not character or not root or not humanoid or not targetRoot
+        or not targetHumanoid or targetHumanoid.Health <= 0 then return end
+
+    FlingBusy = true
+    FlingCancel = false
+    task.spawn(function()
+        local startCFrame = root.CFrame
+        local startVelocity = root.AssemblyLinearVelocity
+        local startAngular = root.AssemblyAngularVelocity
+        local priorCollision = root.CanCollide
+        local priorState = State.antiFling
+        local spin
+        local success, reason = pcall(function()
+            if Spy.active then H.StopSpy() end
+            if State.invisible then
+                State.invisible = false
+                H.SetInvisible(false)
+                startCFrame = root.CFrame
+            end
+            H.AntiFlingGrace(5)
+            -- Keep the character controllable and restore its original state afterward.
+            root.CanCollide = false
+            spin = Instance.new("BodyAngularVelocity")
+            spin.Name = "KHASTIFY_TargetFling"
+            spin.AngularVelocity = Vector3.new(0, 100000, 0)
+            spin.MaxTorque = Vector3.new(math.huge, math.huge, math.huge)
+            spin.P = 100000
+            spin.Parent = root
+
+            local started = os.clock()
+            local tickIndex = 0
+            while Alive and not FlingCancel and os.clock() - started < 1.3 do
+                if LP.Character ~= character or not root.Parent
+                    or targetPlayer.Character ~= targetCharacter
+                    or not targetRoot.Parent or targetHumanoid.Health <= 0 then
+                    break
+                end
+                tickIndex += 1
+                local targetPosition = targetRoot.Position
+                local targetVelocity = targetRoot.AssemblyLinearVelocity
+                local lead = Vector3.new(targetVelocity.X, 0, targetVelocity.Z) * 0.08
+                local angle = tickIndex * 2.4
+                local offset = Vector3.new(math.cos(angle)*1.4, (tickIndex%4)*0.7-0.5, math.sin(angle)*1.4)
+                root.CFrame = CFrame.new(targetPosition + lead + offset)
+                root.AssemblyLinearVelocity = Vector3.new(0, 350, 0)
+                Run.Heartbeat:Wait()
+            end
+        end)
+        if spin then pcall(function() spin:Destroy() end) end
+        if root and root.Parent then
+            pcall(function()
+                root.CanCollide = priorCollision
+                root.AssemblyAngularVelocity = startAngular
+                root.AssemblyLinearVelocity = startVelocity
+                if LP.Character == character then
+                    character:PivotTo(startCFrame)
+                end
+            end)
+        end
+        if not success then warn("[KHASTIFY] Fling error:", reason) end
+        FlingBusy = false
+    end)
+end
+
 local ProfileWindow
 local ProfileGeneration = 0
 local ProfileHighlight
@@ -3712,14 +3786,8 @@ function H.OpenPlayerProfile(player)
             pcall(setclipboard,url); buttons[5].Text = "Copied!"
         else buttons[5].Text = "Clipboard unavailable" end
     end)
-    -- Preserve the existing Fling behavior; player-targeted fling is a separate planned fix.
     H.Bind(buttons[6].MouseButton1Click, function()
-        if Spy.active then H.StopSpy() end
-        local root = H.Root()
-        if not root then return end
-        local previous = root.AssemblyAngularVelocity
-        root.AssemblyAngularVelocity = Vector3.new(0,30,0)
-        task.delay(0.45,function() if root.Parent then root.AssemblyAngularVelocity=previous end end)
+        H.FlingPlayer(player)
     end)
 
     local friendsTitle = H.Label(body, "FRIENDS", 12, C.text, true)
@@ -3981,21 +4049,7 @@ function H.MakePlayerCard(player, order)
     end)
 
     local fling = Button("Fling", 2, function()
-        if Spy.active then H.StopSpy() end
-
-        local r = H.Root()
-        if not r then return end
-
-        local old = r.AssemblyAngularVelocity
-
-        r.AssemblyAngularVelocity =
-            Vector3.new(0, 30, 0)
-
-        task.delay(0.45, function()
-            if r.Parent then
-                r.AssemblyAngularVelocity = old
-            end
-        end)
+        H.FlingPlayer(player)
     end)
 
     local spyButton = Button("Spy", 3, function()
@@ -5454,6 +5508,7 @@ end)
 --==================================================
 
 _G.KHASTIFY_HUB_CLEANUP = function()
+    FlingCancel = true
     Alive = false
     PlayerGeneration += 1
 
@@ -5504,7 +5559,7 @@ _G.KHASTIFY_HUB_CLEANUP = function()
 end
 
 print("====================================")
-print("KHASTIFY'S UNIVERSAL HUB V66")
+print("KHASTIFY'S UNIVERSAL HUB V67")
 print("FAVORITES SYSTEM ADDED")
 print("CHARMS ESP ADDED")
 print("SKELETON ESP ADDED")
