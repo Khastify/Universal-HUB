@@ -1,6 +1,6 @@
 local H = {} -- Namespaced functions reduce top-level Luau registers
 --[[
-    KHASTIFY'S UNIVERSAL HUB V65
+    KHASTIFY'S UNIVERSAL HUB V66
 
     NEW:
     - Favorites category
@@ -331,13 +331,14 @@ local State = {
     charms = false,
     skeleton = false,
     antiInvis = false,
+    antiFling = false,
     autoExecute = false,
     menuKey = "K",
     uiX = 0.5,
     uiY = 0.5
 }
 
-local PersistentKeys = {"fly", "flyAnim", "noclip", "infiniteJump", "clickTP", "airWalk", "invisible", "headless", "freeze", "fullbright", "charms", "skeleton", "antiInvis"}
+local PersistentKeys = {"fly", "flyAnim", "noclip", "infiniteJump", "clickTP", "airWalk", "invisible", "headless", "freeze", "fullbright", "charms", "skeleton", "antiInvis", "antiFling"}
 local ESPColors = {charms = Color3.fromRGB(157,91,255), skeleton = Color3.fromRGB(157,91,255)}
 local function ColorToSave(color)
     return {math.floor(color.R*255+0.5),math.floor(color.G*255+0.5),math.floor(color.B*255+0.5)}
@@ -652,6 +653,7 @@ function H.StartAirWalk()
 end
 
 function H.Dash()
+    H.AntiFlingGrace(1.5)
     local r = H.Root()
     local camera = workspace.CurrentCamera
 
@@ -667,6 +669,87 @@ function H.Dash()
     r.AssemblyLinearVelocity =
         d.Unit * State.dashPower
         + Vector3.new(0, v.Y, 0)
+end
+
+--==================================================
+-- ANTI FLING: conservative, movement-aware local protection
+--==================================================
+
+local AntiFling = {
+    root = nil,
+    safe = nil,
+    lastVelocity = nil,
+    lastPosition = nil,
+    cooldownUntil = 0,
+    graceUntil = 0,
+    samples = 0
+}
+
+function H.AntiFlingGrace(seconds)
+    AntiFling.graceUntil = math.max(AntiFling.graceUntil, os.clock() + (seconds or 1))
+end
+
+function H.ResetAntiFling()
+    AntiFling.root = nil
+    AntiFling.safe = nil
+    AntiFling.lastVelocity = nil
+    AntiFling.lastPosition = nil
+    AntiFling.samples = 0
+    H.AntiFlingGrace(1.5)
+end
+
+function H.SetAntiFling(on)
+    H.ResetAntiFling()
+    if not on then return end
+end
+
+function H.UpdateAntiFling(dt)
+    if not State.antiFling or dt <= 0 or dt > 0.15 then return end
+    local r, h = H.Root(), H.Hum()
+    if not r or not h or h.Health <= 0 then return end
+
+    if AntiFling.root ~= r then
+        H.ResetAntiFling()
+        AntiFling.root = r
+        return
+    end
+
+    local now = os.clock()
+    local position = r.Position
+    local velocity = r.AssemblyLinearVelocity
+    local spin = r.AssemblyAngularVelocity.Magnitude
+
+    -- Never override movement modes that intentionally modify physics.
+    local intentional = State.fly or State.invisible or State.noclip
+        or State.airWalk or State.freeze or r.Anchored
+        or now < AntiFling.graceUntil
+
+    local ground = h.FloorMaterial ~= Enum.Material.Air
+    if not intentional and ground and velocity.Magnitude < 65 and spin < 12 then
+        AntiFling.samples += 1
+        if AntiFling.samples >= 5 then
+            AntiFling.safe = r.CFrame
+        end
+    else
+        AntiFling.samples = 0
+    end
+
+    if not intentional and AntiFling.lastVelocity and now >= AntiFling.cooldownUntil then
+        local deltaV = (velocity - AntiFling.lastVelocity).Magnitude
+        -- Require both extreme spin AND a sudden unexplained velocity spike.
+        -- This deliberately misses some flings to avoid false positives.
+        if spin > 85 and deltaV > 115 and velocity.Magnitude > 125 then
+            AntiFling.cooldownUntil = now + 1
+            r.AssemblyAngularVelocity = Vector3.zero
+            r.AssemblyLinearVelocity = Vector3.zero
+            if AntiFling.safe and (position - AntiFling.safe.Position).Magnitude < 120 then
+                r.CFrame = AntiFling.safe
+            end
+        end
+    end
+
+    AntiFling.lastVelocity = r.AssemblyLinearVelocity
+    AntiFling.lastPosition = r.Position
 end
 
 --==================================================
@@ -1069,6 +1152,7 @@ function H.Freeze(enabled)
 end
 
 function H.Unstuck()
+    H.AntiFlingGrace(2)
     local r = H.Root()
     if not r then return end
 
@@ -1084,6 +1168,7 @@ function H.Respawn()
 end
 
 function H.SelfFling()
+    H.AntiFlingGrace(4)
     local r = H.Root()
     if not r then return end
 
@@ -2209,7 +2294,7 @@ Brand.Position = UDim2.fromOffset(24, 31)
 Brand.Size = UDim2.fromOffset(135, 25)
 
 local Version = H.Label(
-    Sidebar, "universal hub v65", 11, C.muted
+    Sidebar, "universal hub v66", 11, C.muted
 )
 
 Version.Position = UDim2.fromOffset(24, 57)
@@ -3437,6 +3522,7 @@ Sections.Commands = function()
 
     H.SectionTitle("Character")
 
+    H.Toggle("Anti Fling", "antiFling", "Character", H.SetAntiFling)
     H.Toggle("Invisible", "invisible", "Character", H.SetInvisible)
     H.Toggle("Headless", "headless", "Character", H.SetHeadless)
     H.Toggle("Freeze", "freeze", "Character", H.Freeze)
@@ -3490,7 +3576,7 @@ UpdateSpyButtons = function()
     end
 end
 
--- V65 floating player profile; requests are only made when a profile opens.
+-- V66 floating player profile; requests are only made when a profile opens.
 local ProfileWindow
 local ProfileGeneration = 0
 local ProfileHighlight
@@ -5130,6 +5216,7 @@ H.Bind(Run.Stepped, function()
 end)
 
 H.Bind(Run.Heartbeat, function(dt)
+    H.UpdateAntiFling(dt)
     local r = H.Root()
 
     if State.airWalk and AirPlatform and r then
@@ -5282,6 +5369,7 @@ end)
 --==================================================
 
 H.Bind(LP.CharacterAdded, function(c)
+    H.ResetAntiFling()
     if Spy.active then H.StopSpy() end
 
     H.StopFly()
@@ -5416,7 +5504,7 @@ _G.KHASTIFY_HUB_CLEANUP = function()
 end
 
 print("====================================")
-print("KHASTIFY'S UNIVERSAL HUB V65")
+print("KHASTIFY'S UNIVERSAL HUB V66")
 print("FAVORITES SYSTEM ADDED")
 print("CHARMS ESP ADDED")
 print("SKELETON ESP ADDED")
