@@ -1,6 +1,6 @@
 local H = {} -- Namespaced functions reduce top-level Luau registers
 --[[
-    KHASTIFY'S UNIVERSAL HUB V64
+    KHASTIFY'S UNIVERSAL HUB V65
 
     NEW:
     - Favorites category
@@ -2209,7 +2209,7 @@ Brand.Position = UDim2.fromOffset(24, 31)
 Brand.Size = UDim2.fromOffset(135, 25)
 
 local Version = H.Label(
-    Sidebar, "universal hub v64", 11, C.muted
+    Sidebar, "universal hub v65", 11, C.muted
 )
 
 Version.Position = UDim2.fromOffset(24, 57)
@@ -3490,7 +3490,7 @@ UpdateSpyButtons = function()
     end
 end
 
--- V64 floating player profile; requests are only made when a profile opens.
+-- V65 floating player profile; requests are only made when a profile opens.
 local ProfileWindow
 local ProfileGeneration = 0
 local ProfileHighlight
@@ -3971,50 +3971,89 @@ function H.MakePlayerCard(player, order)
     UpdateSpyButtons()
 end
 
+-- Keep the current scroll position and existing cards when players join/leave.
+local PlayerCountLabel
+
+function H.UpdatePlayerCount()
+    if not PlayerCountLabel or not PlayerCountLabel.Parent then return end
+    local count = 0
+    for _ in pairs(PlayerCards) do count += 1 end
+    PlayerCountLabel.Text = tostring(count) .. " players · tap a player to view actions"
+end
+
+function H.SortPlayerCards()
+    local sorted = {}
+    for _, player in ipairs(Players:GetPlayers()) do
+        if player ~= LP and PlayerCards[player.UserId] then
+            table.insert(sorted, player)
+        end
+    end
+    table.sort(sorted, function(a, b)
+        return a.Name:lower() < b.Name:lower()
+    end)
+    for index, player in ipairs(sorted) do
+        local data = PlayerCards[player.UserId]
+        if data and data.frame then data.frame.LayoutOrder = index end
+    end
+end
+
 Sections.Players = function()
     H.AddCategory("All")
-
     PlayerGeneration += 1
     H.ClearPlayerCards()
 
     local sorted = {}
-
     for _, player in ipairs(Players:GetPlayers()) do
-        if player ~= LP then
-            table.insert(sorted, player)
-        end
+        if player ~= LP then table.insert(sorted, player) end
     end
-
     table.sort(sorted, function(a, b)
         return a.Name:lower() < b.Name:lower()
     end)
 
-    local info = H.Label(
-        List,
-        tostring(#sorted)
-            .. " players · tap a player to view actions",
-        12,
-        C.muted
-    )
-
-    info.Size = UDim2.new(1, 0, 0, 27)
-    info.LayoutOrder = 0
+    PlayerCountLabel = H.Label(List, "", 12, C.muted)
+    PlayerCountLabel.Size = UDim2.new(1, 0, 0, 27)
+    PlayerCountLabel.LayoutOrder = 0
 
     for i, player in ipairs(sorted) do
         H.MakePlayerCard(player, i)
     end
-
+    H.UpdatePlayerCount()
     H.Filter()
     UpdateSpyButtons()
 end
 
 function H.RefreshPlayers()
-    if Alive and Active == "Players" then
-        ShowSection("Players")
+    if not Alive or Active ~= "Players" then return end
+
+    -- Remove only cards whose players have left; do not rebuild the page.
+    for userId, data in pairs(PlayerCards) do
+        if not Players:GetPlayerByUserId(userId) then
+            if data.frame then
+                H.RemoveEntry(data.frame)
+                data.frame:Destroy()
+            end
+            PlayerCards[userId] = nil
+            if ExpandedPlayer == userId then ExpandedPlayer = nil end
+        end
     end
+
+    -- Create only cards for newly joined players.
+    for _, player in ipairs(Players:GetPlayers()) do
+        if player ~= LP and not PlayerCards[player.UserId] then
+            H.MakePlayerCard(player, 999)
+        end
+    end
+
+    H.SortPlayerCards()
+    H.UpdatePlayerCount()
+    H.Filter()
+    UpdateSpyButtons()
+    -- Deliberately preserve List.CanvasPosition, search text and expanded cards.
 end
 
-H.Bind(Players.PlayerAdded, H.RefreshPlayers)
+H.Bind(Players.PlayerAdded, function()
+    task.defer(H.RefreshPlayers)
+end)
 
 H.Bind(Players.PlayerRemoving, function()
     task.defer(H.RefreshPlayers)
@@ -5377,7 +5416,7 @@ _G.KHASTIFY_HUB_CLEANUP = function()
 end
 
 print("====================================")
-print("KHASTIFY'S UNIVERSAL HUB V64")
+print("KHASTIFY'S UNIVERSAL HUB V65")
 print("FAVORITES SYSTEM ADDED")
 print("CHARMS ESP ADDED")
 print("SKELETON ESP ADDED")
