@@ -1702,7 +1702,7 @@ function H.MakeCharmsFallback(character)
             proxy.CastShadow = false
             proxy.Material = Enum.Material.SmoothPlastic
             proxy.Color = ESPColors.charms
-            proxy.Transparency = 0.01
+            proxy.Transparency = 0.5
             proxy.Size = part.Size
             proxy.CFrame = part.CFrame
             proxy.Parent = model
@@ -1741,7 +1741,7 @@ function H.CreateCharms(player)
         Adornee = character,
         DepthMode = Enum.HighlightDepthMode.AlwaysOnTop,
         FillColor = ESPColors.charms,
-        FillTransparency = 1,
+        FillTransparency = 0.65,
         OutlineColor = ESPColors.charms,
         OutlineTransparency = 0,
         Enabled = true
@@ -1754,7 +1754,7 @@ function H.CreateCharms(player)
         Adornee = fallback,
         DepthMode = Enum.HighlightDepthMode.AlwaysOnTop,
         FillColor = ESPColors.charms,
-        FillTransparency = 1,
+        FillTransparency = 0.72,
         OutlineColor = ESPColors.charms,
         OutlineTransparency = 0,
         Enabled = false
@@ -1930,7 +1930,7 @@ function H.CreateSkeleton(player)
             ZIndex = 10
         }, screen)
 
-        H.Corner(line, 3)
+        H.Corner(line, 2)
 
         table.insert(lines, {
             frame = line,
@@ -1985,26 +1985,15 @@ function H.UpdateSkeletons()
                             and first:IsA("BasePart")
                             and second:IsA("BasePart") then
 
-                            local function JointPoint(part, other)
-                                for _, motor in ipairs(data.character:GetDescendants()) do
-                                    if motor:IsA("Motor6D") then
-                                        if motor.Part0 == part and motor.Part1 == other then
-                                            return (motor.Part0.CFrame * motor.C0).Position
-                                        elseif motor.Part1 == part and motor.Part0 == other then
-                                            return (motor.Part1.CFrame * motor.C1).Position
-                                        end
-                                    end
-                                end
-                                return part.Position
-                            end
-                            local a = JointPoint(first, second)
-                            local b = JointPoint(second, first)
-                            if (a-b).Magnitude < 0.05 then
-                                a = first.Position:Lerp(a, 0.55)
-                                b = second.Position:Lerp(b, 0.55)
-                            end
-                            local p1, visible1 = camera:WorldToViewportPoint(a)
-                            local p2, visible2 = camera:WorldToViewportPoint(b)
+                            local p1, visible1 =
+                                camera:WorldToViewportPoint(
+                                    first.Position
+                                )
+
+                            local p2, visible2 =
+                                camera:WorldToViewportPoint(
+                                    second.Position
+                                )
 
                             if p1.Z > 0
                                 and p2.Z > 0
@@ -3095,16 +3084,10 @@ end
 
 
 -- Expandable independent ESP color pickers; colors save even while disabled.
-local ESPPalette = {
-    Color3.fromRGB(157,91,255), Color3.fromRGB(70,135,255),
-    Color3.fromRGB(0,220,255), Color3.fromRGB(0,210,125),
-    Color3.fromRGB(255,225,60), Color3.fromRGB(255,155,40),
-    Color3.fromRGB(255,70,75), Color3.fromRGB(255,95,190),
-    Color3.fromRGB(255,255,255), Color3.fromRGB(25,25,30),
-    Color3.fromRGB(150,155,165), Color3.fromRGB(150,100,65),
-    Color3.fromRGB(200,155,255), Color3.fromRGB(130,195,255),
-    Color3.fromRGB(155,245,155), Color3.fromRGB(255,155,155)
-}
+-- HSV gradient grid: horizontal hue, vertical saturation, with brightness slider.
+local ESPGridColumns = 24
+local ESPGridRows = 9
+local ESPBrightness = {charms=1, skeleton=1}
 local OpenESPCard = nil
 local ESPCardClosers = {}
 function H.ESPFeature(name, key, setter)
@@ -3124,38 +3107,137 @@ function H.ESPFeature(name, key, setter)
     Commands[name]=Execute
     H.Bind(toggle.MouseButton1Click,Execute)
     local arrow = H.Create("TextButton", {Position=UDim2.new(1,-30,0,18),Size=UDim2.fromOffset(25,28),BackgroundTransparency=1,Text="›",TextColor3=C.muted,TextSize=25,Font=Enum.Font.GothamMedium,Rotation=0,AutoButtonColor=false},card)
-    local picker = H.Create("Frame", {Position=UDim2.fromOffset(13,69),Size=UDim2.new(1,-26,0,85),BackgroundTransparency=1},card)
-    local caption=H.Label(picker,"ESP COLOR",11,C.muted,true)
-    caption.Size=UDim2.new(1,0,0,18)
-    local swatches={}
-    local function RefreshSwatches()
-        for _, item in ipairs(swatches) do
-            local selected = ESPColors[key] == item.color
-            item.stroke.Color = selected and C.purple or C.border
-            item.stroke.Thickness = selected and 3 or 1
+    local _,_,savedBrightness=ESPColors[key]:ToHSV()
+    ESPBrightness[key]=savedBrightness
+    local picker = H.Create("Frame", {Position=UDim2.fromOffset(13,69),Size=UDim2.new(1,-26,0,203),BackgroundTransparency=1,Visible=false},card)
+    local caption=H.Label(picker,"ESP COLOR GRADIENT",11,C.muted,true)
+    caption.Size=UDim2.new(1,-80,0,18)
+    local preview=H.Create("Frame",{Position=UDim2.new(1,-30,0,0),Size=UDim2.fromOffset(28,18),BackgroundColor3=ESPColors[key],BorderSizePixel=0},picker)
+    H.Corner(preview,4)
+    H.Stroke(preview,C.border,1)
+    local grid=H.Create("Frame",{Position=UDim2.fromOffset(0,24),Size=UDim2.new(1,0,0,105),BackgroundTransparency=1},picker)
+    local gridLayout=H.Create("UIGridLayout",{
+        CellSize=UDim2.new(1/ESPGridColumns,-1,0,11),
+        CellPadding=UDim2.fromOffset(1,1),
+        SortOrder=Enum.SortOrder.LayoutOrder
+    },grid)
+    local cells={}
+    local hexInput = H.Create("TextBox", {
+        Position=UDim2.fromOffset(65,163),Size=UDim2.new(1,-65,0,27),
+        BackgroundColor3=C.bg,BorderSizePixel=0,
+        Text="",PlaceholderText="#9D5BFF",PlaceholderColor3=C.faint,
+        TextColor3=C.text,Font=Enum.Font.GothamMedium,TextSize=12,
+        ClearTextOnFocus=false,TextXAlignment=Enum.TextXAlignment.Center
+    },picker)
+    H.Corner(hexInput,6)
+    H.Stroke(hexInput,C.border,1)
+    local hexLabel=H.Label(picker,"HEX",10,C.muted,true)
+    hexLabel.Position=UDim2.fromOffset(0,167)
+    hexLabel.Size=UDim2.fromOffset(58,18)
+    local function ToHex(color)
+        return string.format("#%02X%02X%02X",
+            math.floor(color.R*255+0.5),
+            math.floor(color.G*255+0.5),
+            math.floor(color.B*255+0.5))
+    end
+    local function SetESPColor(color)
+        ESPColors[key]=color
+        preview.BackgroundColor3=color
+        hexInput.Text=ToHex(color)
+        RecolorESP(key)
+        H.Save()
+    end
+    hexInput.Text=ToHex(ESPColors[key])
+    local function RefreshGrid()
+        local brightness=ESPBrightness[key]
+        for _,cell in ipairs(cells) do
+            cell.button.BackgroundColor3=Color3.fromHSV(cell.hue,cell.saturation,brightness)
         end
     end
-    for i,color in ipairs(ESPPalette) do
-        local col=(i-1)%8
-        local row=math.floor((i-1)/8)
-        local button=H.Create("TextButton", {Position=UDim2.fromOffset(col*39,22+row*30),Size=UDim2.fromOffset(27,25),BackgroundColor3=color,Text="",AutoButtonColor=false},picker)
-        H.Corner(button,5)
-        local stroke=H.Stroke(button,C.border,1)
-        table.insert(swatches,{color=color,stroke=stroke})
-        H.Bind(button.MouseButton1Click,function()
-            ESPColors[key]=color
-            RecolorESP(key)
-            RefreshSwatches()
-            H.Save()
-        end)
+    for row=0,ESPGridRows-1 do
+        for col=0,ESPGridColumns-1 do
+            local hue=col/(ESPGridColumns-1)
+            local saturation=1-row/(ESPGridRows-1)
+            local button=H.Create("TextButton",{
+                LayoutOrder=row*ESPGridColumns+col+1,
+                BackgroundColor3=Color3.fromHSV(hue,saturation,ESPBrightness[key]),
+                BorderSizePixel=0,Text="",AutoButtonColor=false
+            },grid)
+            table.insert(cells,{button=button,hue=hue,saturation=saturation})
+            H.Bind(button.MouseButton1Click,function()
+                SetESPColor(Color3.fromHSV(hue,saturation,ESPBrightness[key]))
+            end)
+        end
     end
-    RefreshSwatches()
+    local brightnessLabel=H.Label(picker,"BRIGHTNESS",10,C.muted,true)
+    brightnessLabel.Position=UDim2.fromOffset(0,137)
+    brightnessLabel.Size=UDim2.fromOffset(90,17)
+    local brightnessTrack=H.Create("Frame",{
+        Position=UDim2.new(0,92,0,143),Size=UDim2.new(1,-92,0,7),
+        BackgroundColor3=Color3.new(1,1,1),BorderSizePixel=0
+    },picker)
+    H.Corner(brightnessTrack,4)
+    local shade=H.Create("UIGradient",{
+        Color=ColorSequence.new(Color3.new(0,0,0),Color3.new(1,1,1))
+    },brightnessTrack)
+    local brightnessMarker=H.Create("Frame",{
+        AnchorPoint=Vector2.new(0.5,0.5),Position=UDim2.fromScale(ESPBrightness[key],0.5),
+        Size=UDim2.fromOffset(5,14),BackgroundColor3=C.text,BorderSizePixel=0
+    },brightnessTrack)
+    H.Corner(brightnessMarker,2)
+    H.Bind(hexInput.FocusLost,function()
+        local raw=hexInput.Text:gsub("%s+",""):gsub("^#","")
+        if raw:match("^%x%x%x$") then
+            raw=raw:sub(1,1):rep(2)..raw:sub(2,2):rep(2)..raw:sub(3,3):rep(2)
+        end
+        if not raw:match("^%x%x%x%x%x%x$") then
+            hexInput.Text=ToHex(ESPColors[key])
+            return
+        end
+        local r=tonumber(raw:sub(1,2),16)
+        local g=tonumber(raw:sub(3,4),16)
+        local b=tonumber(raw:sub(5,6),16)
+        local color=Color3.fromRGB(r,g,b)
+        local _,_,v=color:ToHSV()
+        ESPBrightness[key]=v
+        brightnessMarker.Position=UDim2.fromScale(v,0.5)
+        RefreshGrid()
+        SetESPColor(color)
+    end)
+    local brightnessHit=H.Create("TextButton",{
+        Size=UDim2.fromScale(1,1),BackgroundTransparency=1,Text="",AutoButtonColor=false
+    },brightnessTrack)
+    local draggingBrightness=false
+    local function ApplyBrightness(x)
+        local value=math.clamp((x-brightnessTrack.AbsolutePosition.X)/math.max(brightnessTrack.AbsoluteSize.X,1),0,1)
+        ESPBrightness[key]=value
+        brightnessMarker.Position=UDim2.fromScale(value,0.5)
+        local h,s=ESPColors[key]:ToHSV()
+        RefreshGrid()
+        SetESPColor(Color3.fromHSV(h,s,value))
+    end
+    H.Bind(brightnessHit.InputBegan,function(input)
+        if input.UserInputType==Enum.UserInputType.MouseButton1 or input.UserInputType==Enum.UserInputType.Touch then
+            draggingBrightness=true
+            ApplyBrightness(input.Position.X)
+        end
+    end)
+    H.Bind(UIS.InputChanged,function(input)
+        if draggingBrightness and (input.UserInputType==Enum.UserInputType.MouseMovement or input.UserInputType==Enum.UserInputType.Touch) then
+            ApplyBrightness(input.Position.X)
+        end
+    end)
+    H.Bind(UIS.InputEnded,function(input)
+        if input.UserInputType==Enum.UserInputType.MouseButton1 or input.UserInputType==Enum.UserInputType.Touch then
+            draggingBrightness=false
+        end
+    end)
     local expanded=false
     local function SetExpanded(value)
         expanded=value
         if value then picker.Visible = true end
         H.Tween(arrow, {Rotation=value and 90 or 0, TextColor3=value and C.purple or C.muted}, 0.2)
-        H.Tween(card,{Size=UDim2.new(1,0,0,value and 165 or 63)},0.2)
+        H.Tween(card,{Size=UDim2.new(1,0,0,value and 283 or 63)},0.2)
         if not value then
             task.delay(0.2, function()
                 if not expanded and picker.Parent then picker.Visible=false end
