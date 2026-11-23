@@ -1,6 +1,6 @@
 local H = {} -- Namespaced functions reduce top-level Luau registers
 --[[
-    KHASTIFY'S UNIVERSAL HUB V69
+    KHASTIFY'S UNIVERSAL HUB V70
 
     NEW:
     - Favorites category
@@ -17,7 +17,7 @@ local H = {} -- Namespaced functions reduce top-level Luau registers
     - Slider Reset buttons
     - Camera-based nametags (size 16)
     - Spy and permanent header Stop Spy
-    - Player TP / Fling
+    - Player TP / Mosquito
     - Server browser
     - Auto Execute
     - Original sidebar icons
@@ -331,14 +331,13 @@ local State = {
     charms = false,
     skeleton = false,
     antiInvis = false,
-    antiFling = false,
     autoExecute = false,
     menuKey = "K",
     uiX = 0.5,
     uiY = 0.5
 }
 
-local PersistentKeys = {"fly", "flyAnim", "noclip", "infiniteJump", "clickTP", "airWalk", "invisible", "headless", "freeze", "fullbright", "charms", "skeleton", "antiInvis", "antiFling"}
+local PersistentKeys = {"fly", "flyAnim", "noclip", "infiniteJump", "clickTP", "airWalk", "invisible", "headless", "freeze", "fullbright", "charms", "skeleton", "antiInvis"}
 local ESPColors = {charms = Color3.fromRGB(157,91,255), skeleton = Color3.fromRGB(157,91,255)}
 local function ColorToSave(color)
     return {math.floor(color.R*255+0.5),math.floor(color.G*255+0.5),math.floor(color.B*255+0.5)}
@@ -653,7 +652,6 @@ function H.StartAirWalk()
 end
 
 function H.Dash()
-    H.AntiFlingGrace(1.5)
     local r = H.Root()
     local camera = workspace.CurrentCamera
 
@@ -669,87 +667,6 @@ function H.Dash()
     r.AssemblyLinearVelocity =
         d.Unit * State.dashPower
         + Vector3.new(0, v.Y, 0)
-end
-
---==================================================
--- ANTI FLING: conservative, movement-aware local protection
---==================================================
-
-local AntiFling = {
-    root = nil,
-    safe = nil,
-    lastVelocity = nil,
-    lastPosition = nil,
-    cooldownUntil = 0,
-    graceUntil = 0,
-    samples = 0
-}
-
-function H.AntiFlingGrace(seconds)
-    AntiFling.graceUntil = math.max(AntiFling.graceUntil, os.clock() + (seconds or 1))
-end
-
-function H.ResetAntiFling()
-    AntiFling.root = nil
-    AntiFling.safe = nil
-    AntiFling.lastVelocity = nil
-    AntiFling.lastPosition = nil
-    AntiFling.samples = 0
-    H.AntiFlingGrace(1.5)
-end
-
-function H.SetAntiFling(on)
-    H.ResetAntiFling()
-    if not on then return end
-end
-
-function H.UpdateAntiFling(dt)
-    if not State.antiFling or dt <= 0 or dt > 0.15 then return end
-    local r, h = H.Root(), H.Hum()
-    if not r or not h or h.Health <= 0 then return end
-
-    if AntiFling.root ~= r then
-        H.ResetAntiFling()
-        AntiFling.root = r
-        return
-    end
-
-    local now = os.clock()
-    local position = r.Position
-    local velocity = r.AssemblyLinearVelocity
-    local spin = r.AssemblyAngularVelocity.Magnitude
-
-    -- Never override movement modes that intentionally modify physics.
-    local intentional = State.fly or State.invisible or State.noclip
-        or State.airWalk or State.freeze or r.Anchored
-        or now < AntiFling.graceUntil
-
-    local ground = h.FloorMaterial ~= Enum.Material.Air
-    if not intentional and ground and velocity.Magnitude < 65 and spin < 12 then
-        AntiFling.samples += 1
-        if AntiFling.samples >= 5 then
-            AntiFling.safe = r.CFrame
-        end
-    else
-        AntiFling.samples = 0
-    end
-
-    if not intentional and AntiFling.lastVelocity and now >= AntiFling.cooldownUntil then
-        local deltaV = (velocity - AntiFling.lastVelocity).Magnitude
-        -- Require both extreme spin AND a sudden unexplained velocity spike.
-        -- This deliberately misses some flings to avoid false positives.
-        if spin > 85 and deltaV > 115 and velocity.Magnitude > 125 then
-            AntiFling.cooldownUntil = now + 1
-            r.AssemblyAngularVelocity = Vector3.zero
-            r.AssemblyLinearVelocity = Vector3.zero
-            if AntiFling.safe and (position - AntiFling.safe.Position).Magnitude < 120 then
-                r.CFrame = AntiFling.safe
-            end
-        end
-    end
-
-    AntiFling.lastVelocity = r.AssemblyLinearVelocity
-    AntiFling.lastPosition = r.Position
 end
 
 --==================================================
@@ -1152,7 +1069,6 @@ function H.Freeze(enabled)
 end
 
 function H.Unstuck()
-    H.AntiFlingGrace(2)
     local r = H.Root()
     if not r then return end
 
@@ -1165,20 +1081,6 @@ end
 function H.Respawn()
     local h = H.Hum()
     if h then h.Health = 0 end
-end
-
-function H.SelfFling()
-    H.AntiFlingGrace(4)
-    local r = H.Root()
-    if not r then return end
-
-    r.AssemblyLinearVelocity = Vector3.new(
-        math.random(-120, 120),
-        100,
-        math.random(-120, 120)
-    )
-
-    r.AssemblyAngularVelocity = Vector3.new(15, 20, 15)
 end
 
 local OriginalLighting = {
@@ -2294,7 +2196,7 @@ Brand.Position = UDim2.fromOffset(24, 31)
 Brand.Size = UDim2.fromOffset(135, 25)
 
 local Version = H.Label(
-    Sidebar, "universal hub v69", 11, C.muted
+    Sidebar, "universal hub v70", 11, C.muted
 )
 
 Version.Position = UDim2.fromOffset(24, 57)
@@ -2384,8 +2286,37 @@ H.Bind(HeaderStopSpy.MouseButton1Click, function()
     if Spy.active then H.StopSpy() end
 end)
 
+local HeaderStopMosquito = H.Create("TextButton", {
+    Name = "HeaderStopMosquito",
+    AnchorPoint = Vector2.new(1, 0.5),
+    Position = UDim2.new(1, -176, 0, 28),
+    Size = UDim2.fromOffset(102, 29),
+    BackgroundColor3 = C.purple,
+    BorderSizePixel = 0,
+    Text = "Stop Mosquito",
+    TextColor3 = Color3.fromRGB(255, 255, 255),
+    Font = Enum.Font.GothamBold,
+    TextSize = 11,
+    AutoButtonColor = false,
+    Visible = false,
+    ZIndex = 5
+}, Topbar)
+H.Corner(HeaderStopMosquito, 7)
+H.Bind(HeaderStopMosquito.MouseEnter, function()
+    if HeaderStopMosquito.Visible then
+        H.Tween(HeaderStopMosquito, {BackgroundColor3 = Color3.fromRGB(175,118,255)}, 0.15)
+    end
+end)
+H.Bind(HeaderStopMosquito.MouseLeave, function()
+    H.Tween(HeaderStopMosquito, {BackgroundColor3 = C.purple}, 0.15)
+end)
+H.Bind(HeaderStopMosquito.MouseButton1Click, function()
+    H.StopMosquito()
+end)
+
 UpdateHeaderSpyButton = function()
     HeaderStopSpy.Visible = (Active == "Players")
+    HeaderStopMosquito.Visible = (Active == "Players")
 end
 
 --==================================================
@@ -3522,14 +3453,12 @@ Sections.Commands = function()
 
     H.SectionTitle("Character")
 
-    H.Toggle("Anti Fling", "antiFling", "Character", H.SetAntiFling)
     H.Toggle("Invisible", "invisible", "Character", H.SetInvisible)
     H.Toggle("Headless", "headless", "Character", H.SetHeadless)
     H.Toggle("Freeze", "freeze", "Character", H.Freeze)
 
     H.Action("Unstuck", "Character", "Move upward", H.Unstuck)
     H.Action("Respawn", "Character", "Reset character", H.Respawn)
-    H.Action("Self Fling", "Character", "Launch yourself", H.SelfFling)
 
     H.SectionTitle("Visuals")
 
@@ -3576,107 +3505,86 @@ UpdateSpyButtons = function()
     end
 end
 
--- V69 floating player profile; requests are only made when a profile opens.
--- Targeted physics fling. Roblox server physics/network ownership may reject it.
-local FlingBusy = false
-local FlingCancel = false
+-- V70 floating player profile; requests are only made when a profile opens.
+-- Mosquito: a non-flinging, continuously changing three-dimensional orbit.
+-- The selected player is never moved or modified.
+local Mosquito = {active = false, token = 0, target = nil, character = nil,
+    root = nil, start = nil, previousCollide = nil, previousAutoRotate = nil}
 
-function H.FlingPlayer(targetPlayer)
-    if FlingBusy or not targetPlayer or targetPlayer == LP then return end
-    local character, root, humanoid = H.Char(), H.Root(), H.Hum()
-    local targetCharacter = targetPlayer.Character
-    local targetRoot = targetCharacter and targetCharacter:FindFirstChild("HumanoidRootPart")
-    local targetHumanoid = targetCharacter and targetCharacter:FindFirstChildOfClass("Humanoid")
-    if not character or not root or not humanoid or not targetRoot
-        or not targetHumanoid or targetHumanoid.Health <= 0 then return end
-
-    FlingBusy = true
-    FlingCancel = false
-    task.spawn(function()
-        local startCFrame = root.CFrame
-        local startVelocity = root.AssemblyLinearVelocity
-        local startAngular = root.AssemblyAngularVelocity
-        local priorCollision = root.CanCollide
-        local priorState = State.antiFling
-        local spin
-        local success, reason = pcall(function()
-            if Spy.active then H.StopSpy() end
-            if State.invisible then
-                State.invisible = false
-                H.SetInvisible(false)
-                startCFrame = root.CFrame
-            end
-            H.AntiFlingGrace(5)
-            -- Keep the character controllable and restore its original state afterward.
-            -- Allow physical contact during the maneuver. Restore the prior
-            -- collision setting on completion, including interrupted attempts.
-            root.CanCollide = true
-            spin = Instance.new("BodyAngularVelocity")
-            spin.Name = "KHASTIFY_TargetFling"
-            spin.AngularVelocity = Vector3.new(0, 100000, 0)
-            spin.MaxTorque = Vector3.new(math.huge, math.huge, math.huge)
-            spin.P = 100000
-            spin.Parent = root
-
-            local started = os.clock()
-            local tickIndex = 0
-            local smoothedVelocity = Vector3.zero
-            while Alive and not FlingCancel and os.clock() - started < 1.3 do
-                if LP.Character ~= character or not root.Parent
-                    or targetPlayer.Character ~= targetCharacter
-                    or not targetRoot.Parent or targetHumanoid.Health <= 0 then
-                    break
-                end
-                tickIndex += 1
-                local targetPosition = targetRoot.Position
-                local targetVelocity = targetRoot.AssemblyLinearVelocity
-                -- Smooth velocity changes to avoid chasing an outdated position.
-                smoothedVelocity = smoothedVelocity:Lerp(targetVelocity, 0.4)
-                local horizontalVelocity = Vector3.new(smoothedVelocity.X, 0, smoothedVelocity.Z)
-                local lead = horizontalVelocity * 0.11
-                local angle = tickIndex * 2.4
-                local offset = Vector3.new(math.cos(angle)*0.8, (tickIndex%4)*0.55-0.4, math.sin(angle)*0.8)
-                -- Visual multi-axis tumble: preserve the existing orbit and
-                -- launch settings while allowing the avatar to rotate.
-                local elapsed = os.clock() - started
-                local tumble = CFrame.Angles(elapsed * 11, elapsed * 16, elapsed * 9)
-                -- Keep the spinning character above nearby solid ground.
-                -- Target-relative positions alone can clip beneath sloped floors
-                -- or platforms, particularly during high-speed movement.
-                local desiredPosition = targetPosition + lead + offset
-                local groundParams = RaycastParams.new()
-                groundParams.FilterType = Enum.RaycastFilterType.Exclude
-                groundParams.FilterDescendantsInstances = {character, targetCharacter}
-                groundParams.IgnoreWater = true
-                local groundHit = workspace:Raycast(
-                    Vector3.new(desiredPosition.X, targetPosition.Y + 7, desiredPosition.Z),
-                    Vector3.new(0, -20, 0), groundParams
-                )
-                if groundHit and groundHit.Normal.Y > 0.45 then
-                    desiredPosition = Vector3.new(
-                        desiredPosition.X,
-                        math.max(desiredPosition.Y, groundHit.Position.Y + 3),
-                        desiredPosition.Z
-                    )
-                end
-                root.CFrame = CFrame.new(desiredPosition) * tumble
-                root.AssemblyLinearVelocity = Vector3.new(0, 350, 0)
-                Run.Heartbeat:Wait()
+function H.StopMosquito()
+    Mosquito.token += 1
+    if not Mosquito.active then return end
+    Mosquito.active = false
+    local character, root = Mosquito.character, Mosquito.root
+    if root and root.Parent then
+        pcall(function()
+            root.AssemblyLinearVelocity = Vector3.zero
+            root.AssemblyAngularVelocity = Vector3.zero
+            root.CanCollide = Mosquito.previousCollide
+            if character and character == LP.Character and Mosquito.start then
+                character:PivotTo(Mosquito.start)
             end
         end)
-        if spin then pcall(function() spin:Destroy() end) end
-        if root and root.Parent then
-            pcall(function()
-                root.CanCollide = priorCollision
-                root.AssemblyAngularVelocity = startAngular
-                root.AssemblyLinearVelocity = startVelocity
-                if LP.Character == character then
-                    character:PivotTo(startCFrame)
-                end
-            end)
+    end
+    local hum = character and character:FindFirstChildOfClass("Humanoid")
+    if hum and Mosquito.previousAutoRotate ~= nil then
+        hum.AutoRotate = Mosquito.previousAutoRotate
+    end
+    Mosquito.target, Mosquito.character, Mosquito.root = nil, nil, nil
+end
+
+function H.ToggleMosquito(player)
+    if Mosquito.active then
+        local wasTarget = Mosquito.target == player
+        H.StopMosquito()
+        if wasTarget then return end
+    end
+    if not player or player == LP then return end
+    local character, root, hum = H.Char(), H.Root(), H.Hum()
+    local targetCharacter = player.Character
+    local targetRoot = targetCharacter and targetCharacter:FindFirstChild("HumanoidRootPart")
+    if not character or not root or not hum or not targetRoot then return end
+    if State.invisible then
+        State.invisible = false
+        H.SetInvisible(false)
+        character, root, hum = H.Char(), H.Root(), H.Hum()
+        if not character or not root or not hum then return end
+    end
+    if Spy.active then H.StopSpy() end
+    Mosquito.token += 1
+    local token = Mosquito.token
+    Mosquito.active, Mosquito.target = true, player
+    Mosquito.character, Mosquito.root = character, root
+    Mosquito.start = character:GetPivot()
+    Mosquito.previousCollide = root.CanCollide
+    Mosquito.previousAutoRotate = hum.AutoRotate
+    root.CanCollide = false
+    hum.AutoRotate = false
+    task.spawn(function()
+        local started = os.clock()
+        while Alive and Mosquito.active and Mosquito.token == token do
+            if LP.Character ~= character or player.Parent ~= Players
+                or player.Character ~= targetCharacter or not root.Parent
+                or not targetRoot.Parent or hum.Health <= 0 then break end
+            local t = os.clock() - started
+            -- Multiple frequencies trace the entire sphere, not a flat circle.
+            local azimuth = t * 8.4 + math.sin(t * 1.9) * 1.4
+            local elevation = math.sin(t * 3.1) * 1.28
+            local radius = 3.2 + 0.9 * math.sin(t * 5.3)
+            local horizontal = radius * math.cos(elevation)
+            local offset = Vector3.new(
+                math.cos(azimuth) * horizontal,
+                math.sin(elevation) * radius + 1.1,
+                math.sin(azimuth) * horizontal
+            )
+            local desired = targetRoot.Position + offset
+            local tumble = CFrame.Angles(t * 12.7, t * 15.9, t * 10.3)
+            root.CFrame = CFrame.new(desired) * tumble
+            root.AssemblyLinearVelocity = Vector3.zero
+            root.AssemblyAngularVelocity = Vector3.zero
+            Run.Heartbeat:Wait()
         end
-        if not success then warn("[KHASTIFY] Fling error:", reason) end
-        FlingBusy = false
+        if Mosquito.token == token then H.StopMosquito() end
     end)
 end
 
@@ -3772,7 +3680,7 @@ function H.OpenPlayerProfile(player)
         statLabels[i]=number
     end
 
-    local labels = {"Spy", "TP", "Highlight", "Add Friend", "Copy Profile Link", "Fling"}
+    local labels = {"Spy", "TP", "Highlight", "Add Friend", "Copy Profile Link", "Mosquito"}
     local buttons = {}
     for i, label in ipairs(labels) do
         local col, row = (i-1)%2, math.floor((i-1)/2)
@@ -3816,7 +3724,7 @@ function H.OpenPlayerProfile(player)
         else buttons[5].Text = "Clipboard unavailable" end
     end)
     H.Bind(buttons[6].MouseButton1Click, function()
-        H.FlingPlayer(player)
+        H.ToggleMosquito(player)
     end)
 
     local friendsTitle = H.Label(body, "FRIENDS", 12, C.text, true)
@@ -4009,7 +3917,7 @@ function H.MakePlayerCard(player, order)
     local profileHovered = false
     local profileExpanded = false
     local function UpdateProfileButtonColor()
-        -- Match the TP/Fling/Spy button backgrounds in each card state.
+        -- Match the TP/Mosquito/Spy button backgrounds in each card state.
         local background = profileExpanded and C.card or C.selected
         local foreground = profileHovered and C.text or C.purple
         H.Tween(profileButton, {
@@ -4077,8 +3985,8 @@ function H.MakePlayerCard(player, order)
         end
     end)
 
-    local fling = Button("Fling", 2, function()
-        H.FlingPlayer(player)
+    local mosquito = Button("Mosquito", 2, function()
+        H.ToggleMosquito(player)
     end)
 
     local spyButton = Button("Spy", 3, function()
@@ -4098,7 +4006,7 @@ function H.MakePlayerCard(player, order)
         local buttonColor = open and C.card or C.selected
 
         tp.BackgroundColor3 = buttonColor
-        fling.BackgroundColor3 = buttonColor
+        mosquito.BackgroundColor3 = buttonColor
         spyButton.BackgroundColor3 = buttonColor
         profileExpanded = open
         UpdateProfileButtonColor()
@@ -5299,7 +5207,6 @@ H.Bind(Run.Stepped, function()
 end)
 
 H.Bind(Run.Heartbeat, function(dt)
-    H.UpdateAntiFling(dt)
     local r = H.Root()
 
     if State.airWalk and AirPlatform and r then
@@ -5452,7 +5359,6 @@ end)
 --==================================================
 
 H.Bind(LP.CharacterAdded, function(c)
-    H.ResetAntiFling()
     if Spy.active then H.StopSpy() end
 
     H.StopFly()
@@ -5537,7 +5443,7 @@ end)
 --==================================================
 
 _G.KHASTIFY_HUB_CLEANUP = function()
-    FlingCancel = true
+    H.StopMosquito()
     Alive = false
     PlayerGeneration += 1
 
@@ -5588,7 +5494,7 @@ _G.KHASTIFY_HUB_CLEANUP = function()
 end
 
 print("====================================")
-print("KHASTIFY'S UNIVERSAL HUB V69")
+print("KHASTIFY'S UNIVERSAL HUB V70")
 print("FAVORITES SYSTEM ADDED")
 print("CHARMS ESP ADDED")
 print("SKELETON ESP ADDED")
