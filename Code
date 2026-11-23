@@ -1,6 +1,6 @@
 local H = {} -- Namespaced functions reduce top-level Luau registers
 --[[
-    KHASTIFY'S UNIVERSAL HUB V67
+    KHASTIFY'S UNIVERSAL HUB V68
 
     NEW:
     - Favorites category
@@ -2294,7 +2294,7 @@ Brand.Position = UDim2.fromOffset(24, 31)
 Brand.Size = UDim2.fromOffset(135, 25)
 
 local Version = H.Label(
-    Sidebar, "universal hub v67", 11, C.muted
+    Sidebar, "universal hub v68", 11, C.muted
 )
 
 Version.Position = UDim2.fromOffset(24, 57)
@@ -3576,7 +3576,7 @@ UpdateSpyButtons = function()
     end
 end
 
--- V67 floating player profile; requests are only made when a profile opens.
+-- V68 floating player profile; requests are only made when a profile opens.
 -- Targeted physics fling. Roblox server physics/network ownership may reject it.
 local FlingBusy = false
 local FlingCancel = false
@@ -3630,7 +3630,11 @@ function H.FlingPlayer(targetPlayer)
                 local lead = Vector3.new(targetVelocity.X, 0, targetVelocity.Z) * 0.08
                 local angle = tickIndex * 2.4
                 local offset = Vector3.new(math.cos(angle)*1.4, (tickIndex%4)*0.7-0.5, math.sin(angle)*1.4)
-                root.CFrame = CFrame.new(targetPosition + lead + offset)
+                -- Visual multi-axis tumble: preserve the existing orbit and
+                -- launch settings while allowing the avatar to rotate.
+                local elapsed = os.clock() - started
+                local tumble = CFrame.Angles(elapsed * 11, elapsed * 16, elapsed * 9)
+                root.CFrame = CFrame.new(targetPosition + lead + offset) * tumble
                 root.AssemblyLinearVelocity = Vector3.new(0, 350, 0)
                 Run.Heartbeat:Wait()
             end
@@ -5559,7 +5563,7 @@ _G.KHASTIFY_HUB_CLEANUP = function()
 end
 
 print("====================================")
-print("KHASTIFY'S UNIVERSAL HUB V67")
+print("KHASTIFY'S UNIVERSAL HUB V68")
 print("FAVORITES SYSTEM ADDED")
 print("CHARMS ESP ADDED")
 print("SKELETON ESP ADDED")
