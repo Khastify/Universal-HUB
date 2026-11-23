@@ -1,6 +1,6 @@
 local H = {} -- Namespaced functions reduce top-level Luau registers
 --[[
-    KHASTIFY'S UNIVERSAL HUB V62
+    KHASTIFY'S UNIVERSAL HUB V63
 
     NEW:
     - Favorites category
@@ -2209,7 +2209,7 @@ Brand.Position = UDim2.fromOffset(24, 31)
 Brand.Size = UDim2.fromOffset(135, 25)
 
 local Version = H.Label(
-    Sidebar, "universal hub v62", 11, C.muted
+    Sidebar, "universal hub v63", 11, C.muted
 )
 
 Version.Position = UDim2.fromOffset(24, 57)
@@ -3490,7 +3490,7 @@ UpdateSpyButtons = function()
     end
 end
 
--- V62 floating player profile; requests are only made when a profile opens.
+-- V63 floating player profile; requests are only made when a profile opens.
 local ProfileWindow
 local ProfileGeneration = 0
 local ProfileHighlight
@@ -3568,7 +3568,7 @@ function H.OpenPlayerProfile(player)
     local statNames = {"Friends", "Followers", "Following"}
     for i, title in ipairs(statNames) do
         local cell = H.Create("Frame", {
-            Position=UDim2.new((i-1)/3, 16+(i-1)*3, 0, 148),
+            Position=UDim2.new((i-1)/3, 16-(i-1)*8, 0, 148),
             Size=UDim2.new(1/3,-16,0,54),
             BackgroundColor3=C.card, BorderSizePixel=0
         },body)
@@ -5377,7 +5377,7 @@ _G.KHASTIFY_HUB_CLEANUP = function()
 end
 
 print("====================================")
-print("KHASTIFY'S UNIVERSAL HUB V62")
+print("KHASTIFY'S UNIVERSAL HUB V63")
 print("FAVORITES SYSTEM ADDED")
 print("CHARMS ESP ADDED")
 print("SKELETON ESP ADDED")
