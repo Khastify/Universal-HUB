@@ -3028,8 +3028,8 @@ function H.SliderFeature(
     title.Position = UDim2.fromOffset(15, 7)
     title.Size = UDim2.new(1, -155, 0, 25)
 
-    H.AddFavoriteButton(card, name, 6)
-    H.AddKeybindButton(card, name, 6)
+    H.AddFavoriteButton(card, name, 14)
+    H.AddKeybindButton(card, name, 14)
 
     H.AddSlider(
         card,
