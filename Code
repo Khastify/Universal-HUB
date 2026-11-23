@@ -1,3 +1,4 @@
+local H = {} -- Namespaced functions reduce top-level Luau registers
 --[[
     KHASTIFY'S UNIVERSAL HUB V54
 
