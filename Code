@@ -1,6 +1,6 @@
 local H = {} -- Namespaced functions reduce top-level Luau registers
 --[[
-    KHASTIFY'S UNIVERSAL HUB V56
+    KHASTIFY'S UNIVERSAL HUB V57
 
     NEW:
     - Favorites category
@@ -1408,84 +1408,31 @@ local NametagSystem = {
     hiddenNativeTags = {}
 }
 
--- Suppress game-provided overhead names, including BillboardGuis stored
--- outside the character (for example, in PlayerGui with an Adornee).
--- Never hide KHASTIFY's own BillboardGui or unrelated world-space UI.
-function H.IsNativeUsernameGui(gui, player, character)
-    if not gui:IsA("BillboardGui") or gui.Name == "KHASTIFY_CameraNametag" then
-        return false
-    end
-
-    local head = character:FindFirstChild("Head")
-    local adornee = gui.Adornee
-    local attached = gui:IsDescendantOf(character)
-        or (adornee and adornee:IsDescendantOf(character))
-    local nearHead = head and (gui.Parent == head or adornee == head)
-
-    if not attached and not nearHead then return false end
-
-    local username = player.Name:lower()
-    local displayName = player.DisplayName:lower()
-    local guiName = gui.Name:lower()
-    if guiName:find("name", 1, true) or guiName:find("tag", 1, true) then
-        return true
-    end
-
-    for _, child in ipairs(gui:GetDescendants()) do
-        if child:IsA("TextLabel") or child:IsA("TextButton") then
-            local value = child.Text:lower()
-            if value:find(username, 1, true)
-                or value:find(displayName, 1, true) then
-                return true
-            end
-        end
-    end
-
-    -- Overhead GUIs attached to a head commonly contain username text
-    -- populated after their creation. Exclude empty chat bubbles where possible.
-    if nearHead and not guiName:find("chat", 1, true)
-        and not guiName:find("bubble", 1, true) then
-        return true
-    end
-    return false
-end
-
+-- Only hide name-only BillboardGuis attached to a player character.
+-- Record original Enabled states so unloading restores the game UI.
 function H.HideNativeNametags(player)
     local character = player.Character
     if not character then return end
-
-    local humanoid = character:FindFirstChildOfClass("Humanoid")
-    if humanoid then
-        if NametagSystem.originalDisplays[humanoid] == nil then
-            NametagSystem.originalDisplays[humanoid] = {
-                displayType = humanoid.DisplayDistanceType,
-                nameDistance = humanoid.NameDisplayDistance
-            }
-        end
-        pcall(function()
-            humanoid.DisplayDistanceType = Enum.HumanoidDisplayDistanceType.None
-            humanoid.NameDisplayDistance = 0
-        end)
-    end
-
-    local function suppress(gui)
-        if H.IsNativeUsernameGui(gui, player, character) then
-            if NametagSystem.hiddenNativeTags[gui] == nil then
-                NametagSystem.hiddenNativeTags[gui] = gui.Enabled
-            end
-            if gui.Enabled then gui.Enabled = false end
-        end
-    end
-
     for _, obj in ipairs(character:GetDescendants()) do
-        if obj:IsA("BillboardGui") then suppress(obj) end
-    end
-
-    -- Some games parent overhead nameplates to PlayerGui instead of characters.
-    local playerGui = LP:FindFirstChildOfClass("PlayerGui")
-    if playerGui then
-        for _, obj in ipairs(playerGui:GetDescendants()) do
-            if obj:IsA("BillboardGui") then suppress(obj) end
+        if obj:IsA("BillboardGui") and obj.Name ~= "KHASTIFY_CameraNametag"
+            and NametagSystem.hiddenNativeTags[obj] == nil then
+            local hasName = false
+            local hasOtherText = false
+            for _, child in ipairs(obj:GetDescendants()) do
+                if child:IsA("TextLabel") or child:IsA("TextButton") then
+                    local value = child.Text:gsub("^%s+", ""):gsub("%s+$", "")
+                    if value == player.DisplayName or value == player.Name
+                        or value == ("@" .. player.Name) then
+                        hasName = true
+                    elseif value ~= "" then
+                        hasOtherText = true
+                    end
+                end
+            end
+            if hasName and not hasOtherText then
+                NametagSystem.hiddenNativeTags[obj] = obj.Enabled
+                obj.Enabled = false
+            end
         end
     end
 end
@@ -1501,16 +1448,13 @@ end
 
 function H.RestoreNametagDisplay(humanoid)
     local original = NametagSystem.originalDisplays[humanoid]
+
     if original and humanoid and humanoid.Parent then
         pcall(function()
-            if type(original) == "table" then
-                humanoid.DisplayDistanceType = original.displayType
-                humanoid.NameDisplayDistance = original.nameDistance
-            else
-                humanoid.DisplayDistanceType = original
-            end
+            humanoid.DisplayDistanceType = original
         end)
     end
+
     NametagSystem.originalDisplays[humanoid] = nil
 end
 
@@ -1544,16 +1488,13 @@ function H.CreateNametag(player)
     if not head or not humanoid then return end
 
     if NametagSystem.originalDisplays[humanoid] == nil then
-        NametagSystem.originalDisplays[humanoid] = {
-            displayType = humanoid.DisplayDistanceType,
-            nameDistance = humanoid.NameDisplayDistance
-        }
+        NametagSystem.originalDisplays[humanoid] =
+            humanoid.DisplayDistanceType
     end
 
     pcall(function()
         humanoid.DisplayDistanceType =
             Enum.HumanoidDisplayDistanceType.None
-        humanoid.NameDisplayDistance = 0
     end)
 
     local billboard = H.Create("BillboardGui", {
@@ -1696,11 +1637,7 @@ function H.UpdateNametags()
                 pcall(function()
                     data.humanoid.DisplayDistanceType =
                         Enum.HumanoidDisplayDistanceType.None
-                    data.humanoid.NameDisplayDistance = 0
                 end)
-            end
-            if data.humanoid.NameDisplayDistance ~= 0 then
-                pcall(function() data.humanoid.NameDisplayDistance = 0 end)
             end
         end
     end
@@ -1751,7 +1688,7 @@ H.Bind(Players.PlayerRemoving, function(player)
 end)
 
 --==================================================
--- V56 CHARMS ESP
+-- V57 CHARMS ESP
 --==================================================
 
 local ESP = {
@@ -2078,7 +2015,7 @@ end
 H.Bind(Players.PlayerRemoving, H.AntiInvisRemove)
 
 --==================================================
--- V56 SKELETON ESP
+-- V57 SKELETON ESP
 --==================================================
 
 local R6Bones = {
@@ -2351,7 +2288,7 @@ Brand.Position = UDim2.fromOffset(24, 31)
 Brand.Size = UDim2.fromOffset(135, 25)
 
 local Version = H.Label(
-    Sidebar, "universal hub v56", 11, C.muted
+    Sidebar, "universal hub v57", 11, C.muted
 )
 
 Version.Position = UDim2.fromOffset(24, 57)
@@ -2825,7 +2762,7 @@ function H.MakeCard(height, order)
 end
 
 --==================================================
--- V56 FAVORITE STAR
+-- V57 FAVORITE STAR
 --==================================================
 
 function H.UpdateFavoriteButton(name)
@@ -3484,7 +3421,7 @@ function H.ESPFeature(name, key, setter)
 end
 
 --==================================================
--- COMMANDS PAGE - V56
+-- COMMANDS PAGE - V57
 --==================================================
 
 Sections.Commands = function()
@@ -4581,7 +4518,7 @@ Sections.Settings = function()
     local card = H.MakeCard(74)
 
     local title = H.Label(
-        card, "V56 GUI Icons", 14, C.text, true
+        card, "V57 GUI Icons", 14, C.text, true
     )
 
     title.Position = UDim2.fromOffset(14, 8)
@@ -4607,7 +4544,7 @@ Sections.Settings = function()
     description.Position = UDim2.fromOffset(14, 55)
     description.Size = UDim2.new(1, -28, 0, 17)
 
-    H.AddEntry(card, "v56 icon system", "All")
+    H.AddEntry(card, "v57 icon system", "All")
 end
 
 --==================================================
@@ -5220,7 +5157,7 @@ _G.KHASTIFY_HUB_CLEANUP = function()
 end
 
 print("====================================")
-print("KHASTIFY'S UNIVERSAL HUB V56")
+print("KHASTIFY'S UNIVERSAL HUB V57")
 print("FAVORITES SYSTEM ADDED")
 print("CHARMS ESP ADDED")
 print("SKELETON ESP ADDED")
