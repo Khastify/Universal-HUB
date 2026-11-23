@@ -1,6 +1,6 @@
 local H = {} -- Namespaced functions reduce top-level Luau registers
 --[[
-    KHASTIFY'S UNIVERSAL HUB V60
+    KHASTIFY'S UNIVERSAL HUB V61
 
     NEW:
     - Favorites category
@@ -2209,7 +2209,7 @@ Brand.Position = UDim2.fromOffset(24, 31)
 Brand.Size = UDim2.fromOffset(135, 25)
 
 local Version = H.Label(
-    Sidebar, "universal hub v60", 11, C.muted
+    Sidebar, "universal hub v61", 11, C.muted
 )
 
 Version.Position = UDim2.fromOffset(24, 57)
@@ -3490,7 +3490,7 @@ UpdateSpyButtons = function()
     end
 end
 
--- V60 floating player profile; requests are only made when a profile opens.
+-- V61 floating player profile; requests are only made when a profile opens.
 local ProfileWindow
 local ProfileGeneration = 0
 local ProfileHighlight
@@ -3517,7 +3517,7 @@ function H.OpenPlayerProfile(player)
         ClipsDescendants = true, Active = true
     }, GUI)
     ProfileWindow = panel
-    H.Corner(panel, 11); H.Stroke(panel, C.border, 1)
+    H.Corner(panel, 17); H.Stroke(panel, C.border, 1)
     local header = H.Create("Frame", {Size = UDim2.new(1, 0, 0, 43), BackgroundColor3 = C.side, BorderSizePixel = 0, Active = true}, panel)
     local heading = H.Label(header, "PLAYER PROFILE", 13, C.text, true)
     heading.Position = UDim2.fromOffset(15, 0); heading.Size = UDim2.new(1, -65, 1, 0)
@@ -3814,11 +3814,24 @@ function H.MakePlayerCard(player, order)
         ZIndex = 3
     }, card)
     H.Corner(profileButton, 7)
+    local profileHovered = false
+    local profileExpanded = false
+    local function UpdateProfileButtonColor()
+        -- Match the TP/Fling/Spy button backgrounds in each card state.
+        local background = profileExpanded and C.card or C.selected
+        local foreground = profileHovered and C.text or C.purple
+        H.Tween(profileButton, {
+            BackgroundColor3 = background,
+            TextColor3 = foreground
+        }, 0.16)
+    end
     H.Bind(profileButton.MouseEnter, function()
-        H.Tween(profileButton,{BackgroundColor3=C.hover,TextColor3=C.text},0.16)
+        profileHovered = true
+        UpdateProfileButtonColor()
     end)
     H.Bind(profileButton.MouseLeave, function()
-        H.Tween(profileButton,{BackgroundColor3=C.selected,TextColor3=C.purple},0.16)
+        profileHovered = false
+        UpdateProfileButtonColor()
     end)
     H.Bind(profileButton.MouseButton1Click, function() H.OpenPlayerProfile(player) end)
     display.Size = UDim2.new(1, -178, 0, 24)
@@ -3909,6 +3922,8 @@ function H.MakePlayerCard(player, order)
         tp.BackgroundColor3 = buttonColor
         fling.BackgroundColor3 = buttonColor
         spyButton.BackgroundColor3 = buttonColor
+        profileExpanded = open
+        UpdateProfileButtonColor()
         spyButton.Text = "Spy"
 
         H.Tween(card, {
@@ -5353,7 +5368,7 @@ _G.KHASTIFY_HUB_CLEANUP = function()
 end
 
 print("====================================")
-print("KHASTIFY'S UNIVERSAL HUB V60")
+print("KHASTIFY'S UNIVERSAL HUB V61")
 print("FAVORITES SYSTEM ADDED")
 print("CHARMS ESP ADDED")
 print("SKELETON ESP ADDED")
